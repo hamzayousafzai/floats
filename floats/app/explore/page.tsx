@@ -1,82 +1,73 @@
 // app/explore/page.tsx
 export const revalidate = 0;
 
+import ExploreView from "@/components/explore/ExploreView";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import FavoriteButton from "@/components/FavoriteButton";
-import { toggleFavorite } from "@/app/actions/favorites";
-import Image from "next/image";
 
-function fmtNext(starts?: string, address?: string | null) {
-  if (!starts) return null;
-  try {
-    const d = new Date(starts);
-    return `${d.toLocaleString()}${address ? ` @ ${address}` : ""}`;
-  } catch {
-    return null;
-  }
-}
+type NextEventRow = {
+  vendor_id: string;
+  starts_at: string;
+  ends_at: string | null;
+  address: string | null;
+};
 
 export default async function ExplorePage() {
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: vendors } = await supabase
+  // vendors
+  const { data: vendors, error: vErr } = await supabase
     .from("vendors")
-    .select(
-      "id, slug, name, category, photo_url, next_event:next_event_per_vendor(starts_at, address)"
-    )
+    .select("id, slug, name, category, photo_url")
     .order("name", { ascending: true })
-    .limit(50);
+    .limit(100);
 
-  // Map of vendor_id -> favorited?
-  const favSet = new Set<string>();
+  if (vErr) {
+    return <main className="p-4">Error loading vendors: {vErr.message}</main>;
+  }
+
+  const vendorIds = (vendors ?? []).map(v => v.id);
+
+  // next events for those vendors (via the view from schema.sql)
+  let nextByVendor = new Map<string, NextEventRow>();
+  if (vendorIds.length) {
+    const { data: nextEvents } = await supabase
+      .from("next_event_per_vendor")
+      .select("vendor_id, starts_at, ends_at, address")
+      .in("vendor_id", vendorIds);
+    (nextEvents ?? []).forEach((row) => nextByVendor.set(row.vendor_id, row as NextEventRow));
+  }
+
+  // favorites for this user
+  let favoriteIds: string[] = [];
   if (user) {
     const { data: favs } = await supabase
       .from("favorites")
       .select("vendor_id")
       .eq("user_id", user.id);
-    (favs ?? []).forEach((f: { vendor_id: string }) => favSet.add(f.vendor_id));
+    favoriteIds = (favs ?? []).map((f: { vendor_id: string }) => f.vendor_id);
   }
 
+  // shape into card data
+  const cardData = (vendors ?? []).map((v) => {
+    const nxt = nextByVendor.get(v.id);
+    return {
+      id: v.id,
+      slug: v.slug,
+      name: v.name,
+      category: v.category,
+      photo_url: v.photo_url,
+      next: nxt
+        ? { starts_at: nxt.starts_at, ends_at: nxt.ends_at, address: nxt.address }
+        : null,
+    };
+  });
+
   return (
-    <main className="p-4 space-y-4">
-      <h1 className="text-xl font-semibold">Explore</h1>
-      <ul className="grid grid-cols-1 gap-3">
-        {(vendors ?? []).map((v) => {
-          const nextLine = fmtNext(v.next_event?.starts_at, v.next_event?.address);
-          return (
-            <li key={v.id} className="border rounded-lg p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {v.photo_url && (
-                  <Image
-                    src={v.photo_url}
-                    alt={v.name}
-                    width={48}
-                    height={48}
-                    unoptimized
-                    className="w-12 h-12 object-cover rounded"
-                  />
-                )}
-                <div>
-                  <a href={`/vendor/${v.slug}`} className="font-medium underline">
-                    {v.name}
-                  </a>
-                  <div className="text-sm text-gray-600">{v.category ?? "—"}</div>
-                  <div className="text-sm text-gray-600">
-                    {nextLine ? `Next event: ${nextLine}` : "Next event: —"}
-                  </div>
-                </div>
-              </div>
-              <FavoriteButton
-                vendorId={v.id}
-                initial={favSet.has(v.id)}
-                action={toggleFavorite}
-                revalidatePaths={["/explore", `/vendor/${v.slug}`]}
-              />
-            </li>
-          );
-        })}
-      </ul>
-    </main>
+    <ExploreView
+      vendors={cardData}
+      favoriteIds={favoriteIds}
+      typeOptions={["All", "Jewelry", "Vintage", "Food"]} // adjust to your taxonomy
+    />
   );
 }
