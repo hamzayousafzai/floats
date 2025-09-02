@@ -1,17 +1,19 @@
-// app/layout.tsx
+// floats/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
-import BottomNav from "@/components/nav/BottomNav";
 
-export const metadata: Metadata = { title: "Floats", description: "Vendor discovery" };
+export const metadata: Metadata = {
+  title: "Floats",
+  description: "Vendor discovery",
+  // This helps iOS safe areas and mobile viewport
+  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+  themeColor: "#ffffff",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-white text-gray-900">
-        <div className="min-h-screen pb-[72px]">{children}</div>
-        <BottomNav />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
