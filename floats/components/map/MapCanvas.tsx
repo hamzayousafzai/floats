@@ -1,8 +1,12 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { EventPin, WhenFilter } from "@/lib/types";
+
+import type { EventPin } from "@/lib/types";
+import MapFilters, { type WhenFilter } from "./MapFilters";
+import { createPinPopupContent } from "./PinPopup";
 
 export default function MapCanvas() {
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -13,13 +17,19 @@ export default function MapCanvas() {
     const map = new maplibregl.Map({
       container: "map",
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-      center: [-80.8431, 35.2271],
+      center: [-80.8431, 35.2271], // Charlotte
       zoom: 12,
     });
     mapRef.current = map;
 
+    const clearMarkers = () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+    };
+
     const fetchPins = async () => {
       if (!mapRef.current) return;
+
       const b = mapRef.current.getBounds();
       const params = new URLSearchParams({
         minLng: b.getWest().toString(),
@@ -28,57 +38,66 @@ export default function MapCanvas() {
         maxLat: b.getNorth().toString(),
         when,
       });
-      const res = await fetch(`/api/map/search?${params.toString()}`, { cache: "no-store" });
-      const data: EventPin[] = await res.json();
 
-      // clear old markers
-      markersRef.current.forEach(m => m.remove());
-      markersRef.current = [];
+      let payload: unknown = [];
+      try {
+        const res = await fetch(`/api/map/search?${params.toString()}`, { cache: "no-store" });
+        payload = await res.json();
+      } catch (e) {
+        console.error("Failed to fetch /api/map/search", e);
+      }
+
+      const data = Array.isArray(payload) ? (payload as EventPin[]) : [];
+
+      clearMarkers();
 
       data.forEach((p) => {
+        const popupNode = createPinPopupContent({
+          vendorSlug: p.vendorSlug,
+          vendorName: p.vendorName,
+          title: p.title,
+          starts_at: p.starts_at,
+          ends_at: p.ends_at,
+          address: p.address ?? undefined,
+        });
+
         const marker = new maplibregl.Marker()
           .setLngLat([p.lng, p.lat])
-          .setPopup(new maplibregl.Popup().setHTML(
-            `<div style="font-weight:600">${p.vendorName}</div>
-             <div style="font-size:12px;margin-top:2px">${p.title ?? ""}</div>
-             <a href="/vendor/${p.vendorSlug}" style="display:inline-block;margin-top:6px;text-decoration:underline">View profile</a>`
-          ))
+          .setPopup(new maplibregl.Popup().setDOMContent(popupNode))
           .addTo(mapRef.current!);
+
         markersRef.current.push(marker);
       });
     };
 
-    let timer: any;
+    // Debounce moveend
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handleMoveEnd = () => {
-      clearTimeout(timer);
-      timer = setTimeout(fetchPins, 300); // debounce
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(fetchPins, 300);
     };
 
     map.on("load", fetchPins);
     map.on("moveend", handleMoveEnd);
 
+    // Optional: fetch again on style load changes (if you ever swap styles)
+    map.on("styledata", () => {
+      // no-op now, but kept for future extensibility
+    });
+
     return () => {
-      clearTimeout(timer);
-      markersRef.current.forEach(m => m.remove());
+      if (timer) clearTimeout(timer);
+      clearMarkers();
       map.remove();
     };
   }, [when]);
 
   return (
     <div className="w-full h-full relative">
-      <div className="absolute top-3 left-3 z-10 bg-white/90 rounded-xl shadow px-2 py-1 text-sm flex gap-1">
-        {(["now","today","weekend"] as const).map(w => (
-          <button
-            key={w}
-            onClick={() => setWhen(w)}
-            className={`px-2 py-1 rounded ${w===when ? "bg-black text-white" : "bg-white border"}`}
-          >
-            {w.toUpperCase()}
-          </button>
-        ))}
+      <div className="absolute top-3 left-3 z-10">
+        <MapFilters value={when} onChange={setWhen} />
       </div>
       <div id="map" className="w-full h-full" />
     </div>
   );
 }
-
