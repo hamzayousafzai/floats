@@ -2,6 +2,7 @@ export const revalidate = 0;
 
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import SignOutButton from "@/components/SignOutButton";
 
 type FavoriteRow = {
   vendor_id: string;
@@ -29,6 +30,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="p-4 space-y-3">
+      <SignOutButton next="/login" />
       <h1 className="text-xl font-semibold">Your Favorites</h1>
       <ul className="space-y-2">
         {favorites.length ? favorites.map((f, i) => (
