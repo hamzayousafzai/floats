@@ -11,13 +11,13 @@ export function normalizeBbox(minLng: number, minLat: number, maxLng: number, ma
   };
 }
 
-export function getTimeWindowSQL(where: "now" | "today" | "weekend") {
+export function getTimeWindowSQL(where: "today" | "weekend" | "month") {
   switch (where) {
-    case "now":
-      return "tstzrange(e.starts_at, e.ends_at, '[]') @> now()";
     case "today":
       return "e.starts_at::date = now()::date";
     case "weekend":
       return "EXTRACT(ISODOW FROM e.starts_at) IN (6,7)"; // Sat/Sun
+    case "month":
+      return "date_trunc('month', e.starts_at) = date_trunc('month', now())";
   }
 }

@@ -11,7 +11,7 @@ import { createPinPopupContent } from "./PinPopup";
 export default function MapCanvas() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
-  const [when, setWhen] = useState<WhenFilter>("now");
+  const [when, setWhen] = useState<WhenFilter>("today");
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -93,11 +93,11 @@ export default function MapCanvas() {
   }, [when]);
 
   return (
-    <div className="w-full h-full relative">
+    <div className="relative w-full">
       <div className="absolute top-3 left-3 z-10">
         <MapFilters value={when} onChange={setWhen} />
       </div>
-      <div id="map" className="h-[calc(100dvh-120px)] w-full" />
+      <div id="map" className="h-[calc(100dvh-64px)] w-full" />
     </div>
   );
 }

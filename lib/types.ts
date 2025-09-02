@@ -10,4 +10,4 @@ export type EventPin = {
   address: string | null;
 };
 
-export type WhenFilter = "now" | "today" | "weekend";
+export type WhenFilter = "today" | "weekend" | "month";

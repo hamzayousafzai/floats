@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-export type WhenFilter = "now" | "today" | "weekend";
+export type WhenFilter = "today" | "weekend" | "month";
 
 type Props = {
   value: WhenFilter;
@@ -13,9 +13,9 @@ type Props = {
 export default function MapFilters({ value, onChange, className }: Props) {
   const items: { key: WhenFilter; label: string }[] = useMemo(
     () => [
-      { key: "now", label: "Now" },
       { key: "today", label: "Today" },
       { key: "weekend", label: "Weekend" },
+      { key: "month", label: "This Month" },
     ],
     []
   );
@@ -24,8 +24,9 @@ export default function MapFilters({ value, onChange, className }: Props) {
     <div
       role="tablist"
       aria-label="Time filter"
-      className={`bg-white/90 rounded-xl shadow border flex items-center gap-1 p-1 ${className ?? ""}`}
+      className={`flex items-center gap-2 rounded-full border bg-white/90 p-1 shadow ${className ?? ""}`}
     >
+      <span className="px-2 text-xs text-gray-600">Time:</span>
       {items.map((it) => {
         const active = value === it.key;
         return (
@@ -34,8 +35,8 @@ export default function MapFilters({ value, onChange, className }: Props) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(it.key)}
-            className={`px-2 py-1 rounded text-sm transition
-              ${active ? "bg-black text-white" : "bg-white hover:bg-gray-100 border"}`}
+            className={`rounded-full px-2 py-1 text-xs transition
+              ${active ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
           >
             {it.label}
           </button>

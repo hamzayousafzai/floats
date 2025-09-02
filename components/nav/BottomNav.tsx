@@ -19,17 +19,17 @@ export default function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {/* list-none prevents browser bullets when Tailwind is live */}
-      <ul className="mx-auto grid max-w-md grid-cols-3 list-none">
+      <ul className="grid w-full grid-cols-3 list-none">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname?.startsWith(href + "/");
           return (
             <li key={href}>
               <Link
                 href={href}
-                className={`flex flex-col items-center py-2 text-xs ${active ? "text-black" : "text-gray-500"}`}
+                className={`flex flex-col items-center justify-center py-2 text-xs ${active ? "text-black" : "text-gray-500"}`}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon size={22} />
+                <Icon size={24} />
                 <span>{label}</span>
               </Link>
             </li>

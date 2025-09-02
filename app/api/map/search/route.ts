@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies, headers } from "next/headers";
-import { getTimeWindowSQL } from "@/lib/geo";
+import { cookies } from "next/headers";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -9,7 +8,7 @@ export async function GET(req: Request) {
   const minLat = parseFloat(searchParams.get("minLat") || "");
   const maxLng = parseFloat(searchParams.get("maxLng") || "");
   const maxLat = parseFloat(searchParams.get("maxLat") || "");
-  const when = (searchParams.get("when") || "now") as "now" | "today" | "weekend";
+  const when = (searchParams.get("when") || "today") as "today" | "weekend" | "month";
 
   if ([minLng, minLat, maxLng, maxLat].some(Number.isNaN)) {
     return NextResponse.json({ error: "Invalid bbox" }, { status: 400 });
@@ -21,8 +20,6 @@ export async function GET(req: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { get: (name) => cookieStore.get(name)?.value } }
   );
-
-  const timeSQL = getTimeWindowSQL(when);
 
   // Query via RPC to keep SQL clean (recommended), but inline SQL via a view also works.
   // Here we use a SQL string in a single call with filters.
