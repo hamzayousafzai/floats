@@ -97,7 +97,7 @@ export default function MapCanvas() {
       <div className="absolute top-3 left-3 z-10">
         <MapFilters value={when} onChange={setWhen} />
       </div>
-      <div id="map" className="w-full h-full" />
+      <div id="map" className="h-[calc(100dvh-120px)] w-full" />
     </div>
   );
 }
