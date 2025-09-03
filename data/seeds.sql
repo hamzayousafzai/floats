@@ -1,6 +1,3 @@
--- Charlotte demo data (approximate coords)
-
--- Vendor: Jessie's Jewelry
 insert into public.vendors (slug, name, description, category, social, photo_url, geom)
 values (
   'jessies-jewelry',
@@ -8,7 +5,7 @@ values (
   'Handmade gemstones and silver pieces.',
   'jewelry',
   '{"instagram":"https://instagram.com/jessiesjewelry"}',
-  null,
+  'https://images.unsplash.com/photo-1520975911135-3c2b6f4f3a6b?auto=format&fit=crop&w=1200&q=80',
   ST_SetSRID(ST_MakePoint(-80.8431, 35.2271), 4326)::geography
 );
 
@@ -20,7 +17,7 @@ values (
   'Curated vintage tees & retro finds.',
   'vintage',
   '{"instagram":"https://instagram.com/kevinsvintage"}',
-  null,
+  'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=1200&q=80',
   ST_SetSRID(ST_MakePoint(-80.84, 35.23), 4326)::geography
 );
 

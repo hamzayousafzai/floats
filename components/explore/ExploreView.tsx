@@ -1,71 +1,97 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search as SearchIcon } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Search } from "lucide-react";
 import TypeChips from "./TypeChips";
-import VendorCard, { type VendorCardData } from "./VendorCard";
-import FavoriteButton from "@/components/FavoriteButton";
-import { toggleFavorite } from "@/app/actions/favorites";
+import VendorCard from "./VendorCard";
 
-export default function ExploreView({
-  vendors,
-  typeOptions = ["All", "Jewelry", "Vintage", "Food"],
-  favoriteIds = [],
-}: {
+type VendorCardData = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  photo_url: string | null;
+  next: {
+    starts_at: string;
+    ends_at: string | null;
+    address: string | null;
+  } | null;
+};
+
+type Props = {
   vendors: VendorCardData[];
-  typeOptions?: string[];
-  favoriteIds?: string[]; // 👈 serializable from server
-}) {
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState("All");
-  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  favoriteIds: string[];
+  typeOptions: string[];
+};
+
+export default function ExploreView({ vendors, favoriteIds, typeOptions }: Props) {
+  const [selectedType, setSelectedType] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filtered = useMemo(() => {
-    let list = vendors;
-    if (type !== "All") list = list.filter(v => (v.category || "").toLowerCase() === type.toLowerCase());
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(v => v.name.toLowerCase().includes(q));
-    }
-    return list.map(v => ({ ...v, isFavorite: favSet.has(v.id) }));
-  }, [vendors, type, query, favSet]);
+    const q = searchQuery.trim().toLowerCase();
+    return vendors.filter(v => {
+      const matchesType = selectedType === "All" || v.category === selectedType;
+      const matchesSearch = !q || v.name.toLowerCase().includes(q);
+      return matchesType && matchesSearch;
+    });
+  }, [vendors, selectedType, searchQuery]);
 
+  // Approx heights:
+  // Nav bar: 64px
+  // Sticky header (search + chips): ~120px (adjust if you change header layout)
+  // We create a scrollable "boxed" list whose height = viewport - nav - header - safe-area
   return (
-    <div className="mx-auto max-w-screen-sm p-4 space-y-4">
-      {/* Search */}
-      <div className="relative">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <input
-          className="w-full rounded-lg border bg-gray-50 pl-9 pr-3 py-2 text-sm"
-          placeholder="Search vendors"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+    <div className="flex flex-col h-full">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b">
+        <div className="mx-auto max-w-md w-full px-4 py-3 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search vendors..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-full border bg-gray-50 pl-11 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/50"
+            />
+          </div>
+          <TypeChips
+            value={selectedType}
+            onChange={setSelectedType}
+            options={typeOptions}
+          />
+        </div>
       </div>
 
-      {/* Filters */}
-      <TypeChips value={type} onChange={setType} options={typeOptions} />
+      {/* Boxed list container */}
+      <main className="flex-1 px-4">
+        <div className="mx-auto max-w-md pt-4 pb-4">
+          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <div
+              className="overflow-y-auto px-4 pt-2 pb-6 space-y-4"
+              style={{
+                // viewport height minus nav (64) minus header (~120)
+                maxHeight: "calc(100vh - 64px - 120px - env(safe-area-inset-bottom))",
+              }}
+            >
+              {filtered.map(v => (
+                <VendorCard
+                  key={v.id}
+                  vendor={v}
+                  isFavorite={favoriteIds.includes(v.id)}
+                />
+              ))}
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 gap-3">
-        {filtered.map((v) => (
-          <div key={v.id} className="relative">
-            <VendorCard v={v} />
-            <div className="absolute top-3 right-3">
-              <FavoriteButton
-                vendorId={v.id}
-                initial={!!v.isFavorite}
-                action={toggleFavorite}
-                revalidatePaths={["/explore", `/vendor/${v.slug}`, "/profile"]}
-                size="sm"
-              />
+              {filtered.length === 0 && (
+                <div className="rounded-xl border border-dashed p-10 text-center text-sm text-gray-500">
+                  No vendors found.
+                </div>
+              )}
             </div>
           </div>
-        ))}
-        {filtered.length === 0 && (
-          <div className="text-sm text-gray-500 py-12 text-center">No vendors match your filters.</div>
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
