@@ -1,4 +1,3 @@
-// floats/app/(app)/layout.tsx
 import type { ReactNode } from "react";
 import BottomNav from "@/components/nav/BottomNav";
 

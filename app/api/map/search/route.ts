@@ -1,36 +1,41 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies, headers } from "next/headers";
-import { getTimeWindowSQL } from "@/lib/geo";
+import { type NextRequest, NextResponse } from "next/server";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const minLng = parseFloat(searchParams.get("minLng") || "");
-  const minLat = parseFloat(searchParams.get("minLat") || "");
-  const maxLng = parseFloat(searchParams.get("maxLng") || "");
-  const maxLat = parseFloat(searchParams.get("maxLat") || "");
-  const when = (searchParams.get("when") || "now") as "now" | "today" | "weekend";
+export const revalidate = 0;
 
-  if ([minLng, minLat, maxLng, maxLat].some(Number.isNaN)) {
-    return NextResponse.json({ error: "Invalid bbox" }, { status: 400 });
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const minLng = searchParams.get("minLng");
+  const minLat = searchParams.get("minLat");
+  const maxLng = searchParams.get("maxLng");
+  const maxLat = searchParams.get("maxLat");
+
+  // Basic validation
+  if (!minLng || !minLat || !maxLng || !maxLat) {
+    return NextResponse.json(
+      { error: "Missing bounding box parameters" },
+      { status: 400 }
+    );
   }
 
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { get: (name) => cookieStore.get(name)?.value } }
-  );
+  try {
+    const supabase = await createSupabaseServer();
+    const { data, error } = await supabase.rpc("get_events_in_view", {
+      min_lat: parseFloat(minLat),
+      min_lng: parseFloat(minLng),
+      max_lat: parseFloat(maxLat),
+      max_lng: parseFloat(maxLng),
+    });
 
-  const timeSQL = getTimeWindowSQL(when);
+    if (error) {
+      console.error("Supabase RPC error:", error);
+      throw error;
+    }
 
-  // Query via RPC to keep SQL clean (recommended), but inline SQL via a view also works.
-  // Here we use a SQL string in a single call with filters.
-  const { data, error } = await supabase.rpc("map_search_events", {
-    p_min_lng: minLng, p_min_lat: minLat, p_max_lng: maxLng, p_max_lat: maxLat, p_time_filter: when
-  });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  return NextResponse.json(data ?? []);
+    // The RPC function now returns all the data we need directly.
+    return NextResponse.json(data);
+  } catch (e) {
+    const error = e as Error;
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

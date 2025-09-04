@@ -7,3 +7,28 @@ html, body {
   padding: 0;
   height: 100%;
 }
+
+:root {
+  --floats-header-h: 56px;
+  --floats-nav-h: 64px;
+  --floats-safe-top: env(safe-area-inset-top);
+  --floats-safe-bottom: env(safe-area-inset-bottom);
+  --floats-header-total: calc(var(--floats-header-h) + var(--floats-safe-top));
+  --floats-nav-total: calc(var(--floats-nav-h) + var(--floats-safe-bottom));
+}
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.layout-main {
+  min-height: 100dvh;
+  padding-top: var(--floats-header-total);
+  padding-bottom: var(--floats-nav-total);
+  /* Prevent horizontal jiggle */
+  overflow-x: hidden;
+}
+/* Utility (optional) for pages that need an internal scroll box */
+.scroll-page {
+  height: calc(100dvh - var(--floats-header-total) - var(--floats-nav-total));
+  overflow-y: auto;
+}

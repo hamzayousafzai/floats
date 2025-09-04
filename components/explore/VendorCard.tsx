@@ -1,80 +1,101 @@
 "use client";
 
-import { Calendar, MapPin } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { Calendar, MapPin, Store } from "lucide-react";
 import FavoriteButton from "@/components/FavoriteButton";
 
-export type VendorCardData = {
-  id: string;
-  slug: string;
-  name: string;
-  category: string | null;
-  photo_url?: string | null;
-  // optional next event snippet:
-  next?: { starts_at: string; ends_at?: string | null; address?: string | null } | null;
-  // favorite:
-  isFavorite?: boolean;
+type Props = {
+  vendor: {
+    id: string;
+    slug: string;
+    name: string;
+    category: string;
+    photo_url: string | null;
+    next: { starts_at: string; ends_at: string | null; address: string | null } | null;
+  };
+  isFavorite: boolean;
 };
 
-export default function VendorCard({
-  v,
-  onToggle,
-}: {
-  v: VendorCardData;
-  onToggle?: (vendorId: string) => void; // optional local callback
-}) {
-  const next = v.next;
+function statusLabel(next: Props["vendor"]["next"]) {
+  if (!next) return null;
+  const now = Date.now();
+  const start = Date.parse(next.starts_at);
+  const end = next.ends_at ? Date.parse(next.ends_at) : null;
+  if (start <= now && (!end || end > now)) return { label: "Live Now", color: "bg-emerald-600" };
+  if (start > now) return { label: "Scheduled", color: "bg-gray-300 text-gray-700" };
+  return null;
+}
+
+export default function VendorCard({ vendor, isFavorite }: Props) {
+  const badge = statusLabel(vendor.next);
+
   return (
-    <div className="rounded-xl border overflow-hidden bg-white">
-      <a href={`/vendor/${v.slug}`} className="block">
-        <div className="aspect-[16/9] bg-gray-100">
-          {/* Simple image; replace with next/image later */}
-          {v.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={v.photo_url} alt={v.name} className="h-full w-full object-cover" />
-          ) : null}
-        </div>
-      </a>
-
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <a href={`/vendor/${v.slug}`} className="font-medium underline">{v.name}</a>
-            <div className="text-xs text-gray-500">{v.category ?? "—"}</div>
-          </div>
-
-          {/* Hook to server action via FavoriteButton if you pass it down */}
-          {onToggle ? (
-            <button
-              onClick={() => onToggle(v.id)}
-              className={`rounded-full border px-2 py-1 text-xs ${v.isFavorite ? "bg-black text-white" : "bg-white"}`}
-              aria-pressed={!!v.isFavorite}
-            >
-              {v.isFavorite ? "★" : "☆"}
-            </button>
-          ) : null}
-        </div>
-
-        {next ? (
-          <div className="mt-2 flex flex-col gap-1 text-xs text-gray-600">
-            <div className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{new Date(next.starts_at).toLocaleString()}</span>
-            </div>
-            {next.address ? (
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                <span>{next.address}</span>
-              </div>
-            ) : null}
-          </div>
+    <article className="group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.06] transition hover:shadow-md">
+      {/* Media */}
+      <div className="relative h-40 w-full overflow-hidden">
+        {vendor.photo_url ? (
+          <Image
+            src={vendor.photo_url}
+            alt={vendor.name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 480px) 100vw, 240px"
+            unoptimized={!vendor.photo_url.startsWith("/")}
+          />
         ) : (
-          <div className="mt-2 text-xs text-gray-500">No upcoming event</div>
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+            <Store className="h-10 w-10 text-gray-400" />
+          </div>
         )}
 
-        <a href={`/vendor/${v.slug}`} className="mt-3 w-full inline-flex justify-center rounded-md border px-3 py-2 text-sm">
-          View Profile
-        </a>
+        {badge && (
+          <span className={`absolute left-3 top-3 rounded-md px-2 py-1 text-[11px] font-medium text-white ${badge.color}`}>
+            {badge.label}
+          </span>
+        )}
+
+        <div className="absolute right-2 top-2 z-10">
+          <FavoriteButton vendorId={vendor.id} isFavorite={isFavorite} />
+        </div>
       </div>
-    </div>
+
+      {/* Body */}
+      <div className="p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold leading-tight line-clamp-1">
+            {vendor.name}
+          </h3>
+          <p className="mt-0.5 text-xs text-gray-500">{vendor.category}</p>
+        </div>
+
+        {vendor.next && (
+          <div className="space-y-1 text-xs text-gray-600">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              {new Date(vendor.next.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              {vendor.next.ends_at && " • "}
+              {vendor.next.ends_at &&
+                new Date(vendor.next.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) +
+                  " - " +
+                  new Date(vendor.next.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </div>
+            {vendor.next.address && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                <span className="truncate">{vendor.next.address}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Link
+          href={`/vendor/${vendor.slug}`}
+          className="block w-full rounded-md bg-black py-2 text-center text-xs font-medium text-white transition hover:bg-black/85"
+        >
+          View Profile
+        </Link>
+      </div>
+    </article>
   );
 }
