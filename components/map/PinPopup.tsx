@@ -9,14 +9,79 @@ export type PinData = {
   address?: string | null;
 };
 
+/**
+ * Determines if an event is today, this weekend, or later.
+ * @param startDate The event's starting date object.
+ * @returns 'today' | 'weekend' | 'future'
+ */
+export function getEventTimeCategory(
+  startDate?: Date
+): "today" | "weekend" | "future" {
+  if (!startDate || isNaN(startDate.getTime())) {
+    return "future";
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const eventDay = new Date(
+    startDate.getFullYear(),
+    startDate.getMonth(),
+    startDate.getDate()
+  );
+
+  // Check if today
+  if (eventDay.getTime() === today.getTime()) {
+    return "today";
+  }
+
+  // Check if this weekend (upcoming Sat or Sun)
+  const dayOfWeek = today.getDay(); // 0=Sun, 6=Sat
+  const daysUntilSaturday = (6 - dayOfWeek + 7) % 7;
+  const nextSaturday = new Date(today);
+  nextSaturday.setDate(today.getDate() + daysUntilSaturday);
+
+  const nextSunday = new Date(nextSaturday);
+  nextSunday.setDate(nextSaturday.getDate() + 1);
+
+  if (
+    eventDay.getTime() === nextSaturday.getTime() ||
+    eventDay.getTime() === nextSunday.getTime()
+  ) {
+    return "weekend";
+  }
+
+  return "future";
+}
+
 function fmtRange(starts?: string, ends?: string) {
-  if (!starts || !ends) return null;
+  if (!starts) return "";
   try {
-    const s = new Date(starts);
-    const e = new Date(ends);
-    return `${s.toLocaleString()} – ${e.toLocaleTimeString()}`;
+    const start = new Date(starts);
+    const options: Intl.DateTimeFormatOptions = {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    };
+    if (!ends) return start.toLocaleString("en-US", options);
+
+    const end = new Date(ends);
+    // If same day, format as "Jan 1, 4:00 PM - 6:00 PM"
+    if (start.toDateString() === end.toDateString()) {
+      return `${start.toLocaleString("en-US", {
+        ...options,
+      })} - ${end.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      })}`;
+    }
+    // Different days
+    return `${start.toLocaleString("en-US", options)} - ${end.toLocaleString(
+      "en-US",
+      options
+    )}`;
   } catch {
-    return null;
+    return "";
   }
 }
 
@@ -25,52 +90,50 @@ function fmtRange(starts?: string, ends?: string) {
  * Keeps user-provided values safe by using textContent.
  */
 export function createPinPopupContent(pin: PinData): HTMLElement {
-  const root = document.createElement("div");
-  root.style.maxWidth = "220px";
-  root.style.fontSize = "12px";
-  root.style.lineHeight = "1.2";
+  const category = getEventTimeCategory(
+    pin.starts_at ? new Date(pin.starts_at) : undefined
+  );
 
-  // Title
-  const name = document.createElement("div");
-  name.style.fontWeight = "600";
-  name.style.marginBottom = "2px";
-  name.textContent = pin.vendorName;
-  root.appendChild(name);
+  let colorClass = "border-gray-300"; // Default (Future)
+  if (category === "today") {
+    colorClass = "border-green-500"; // Green for Today
+  } else if (category === "weekend") {
+    colorClass = "border-amber-500"; // Amber/Yellow for Weekend
+  }
 
-  // Event title
+  const wrapper = document.createElement("div");
+  wrapper.className = `w-56 rounded-lg border bg-white shadow-lg overflow-hidden border-t-4 ${colorClass}`;
+
+  const content = document.createElement("div");
+  content.className = "p-3 space-y-1.5";
+  wrapper.appendChild(content);
+
   if (pin.title) {
-    const t = document.createElement("div");
-    t.style.marginBottom = "2px";
-    t.textContent = pin.title;
-    root.appendChild(t);
+    const titleEl = document.createElement("p");
+    titleEl.className = "text-xs text-gray-700";
+    titleEl.textContent = pin.title;
+    content.appendChild(titleEl);
   }
 
-  // Time range
-  const range = fmtRange(pin.starts_at, pin.ends_at);
-  if (range) {
-    const r = document.createElement("div");
-    r.style.color = "#555";
-    r.style.marginBottom = "2px";
-    r.textContent = range;
-    root.appendChild(r);
+  if (pin.vendorName && pin.vendorSlug) {
+    const vendorLink = document.createElement("a");
+    vendorLink.href = `/vendor/${pin.vendorSlug}`;
+    vendorLink.className = "text-sm font-semibold hover:underline block"; // Added 'block' for better layout
+    vendorLink.textContent = pin.vendorName;
+    content.appendChild(vendorLink);
   }
 
-  // Address
+  const timeEl = document.createElement("p");
+  timeEl.className = "text-xs text-gray-500";
+  timeEl.textContent = fmtRange(pin.starts_at, pin.ends_at);
+  content.appendChild(timeEl);
+
   if (pin.address) {
-    const a = document.createElement("div");
-    a.style.color = "#555";
-    a.textContent = pin.address;
-    root.appendChild(a);
+    const addressEl = document.createElement("p");
+    addressEl.className = "text-xs text-gray-500 mt-1";
+    addressEl.textContent = pin.address;
+    content.appendChild(addressEl);
   }
 
-  // Link
-  const link = document.createElement("a");
-  link.href = `/vendor/${pin.vendorSlug}`;
-  link.textContent = "View profile";
-  link.style.display = "inline-block";
-  link.style.marginTop = "6px";
-  link.style.textDecoration = "underline";
-  root.appendChild(link);
-
-  return root;
+  return wrapper;
 }

@@ -2,45 +2,93 @@
 
 import { useMemo } from "react";
 
-export type WhenFilter = "now" | "today" | "weekend";
+export type TimeFilter = "today" | "weekend" | "month";
+export type DistanceFilter = "1" | "5" | "10";
 
-type Props = {
-  value: WhenFilter;
-  onChange: (next: WhenFilter) => void;
+interface MapFiltersProps {
+  time: TimeFilter;
+  onTimeChange: (t: TimeFilter) => void;
+  distance: DistanceFilter;
+  onDistanceChange: (d: DistanceFilter) => void;
   className?: string;
-};
+}
 
-export default function MapFilters({ value, onChange, className }: Props) {
-  const items: { key: WhenFilter; label: string }[] = useMemo(
-    () => [
-      { key: "now", label: "Now" },
-      { key: "today", label: "Today" },
-      { key: "weekend", label: "Weekend" },
-    ],
-    []
-  );
+const TIME_FILTERS: { key: TimeFilter; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "weekend", label: "Weekend" },
+  { key: "month", label: "This Month" },
+];
+
+const DISTANCE_FILTERS: { key: DistanceFilter; label: string }[] = [
+  { key: "1", label: "1 mile" },
+  { key: "5", label: "5 miles" },
+  { key: "10", label: "10 miles" },
+];
+
+export default function MapFilters({
+  time,
+  onTimeChange,
+  distance,
+  onDistanceChange,
+  className,
+}: MapFiltersProps) {
 
   return (
     <div
-      role="tablist"
-      aria-label="Time filter"
-      className={`bg-white/90 rounded-xl shadow border flex items-center gap-1 p-1 ${className ?? ""}`}
+      className={`space-y-2 text-xs font-medium ${className ?? ""}`}
+      aria-label="Map filters"
     >
-      {items.map((it) => {
-        const active = value === it.key;
-        return (
-          <button
-            key={it.key}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(it.key)}
-            className={`px-2 py-1 rounded text-sm transition
-              ${active ? "bg-black text-white" : "bg-white hover:bg-gray-100 border"}`}
-          >
-            {it.label}
-          </button>
-        );
-      })}
+      {/* Time */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-600">Time:</span>
+        <div
+          role="radiogroup"
+          aria-label="Time range"
+          className="flex items-center gap-1 bg-white/90 rounded-xl shadow border p-1"
+        >
+          {TIME_FILTERS.map((it) => {
+            const active = time === it.key;
+            return (
+              <button
+                key={it.key}
+                role="radio"
+                aria-checked={active}
+                onClick={() => onTimeChange(it.key)}
+                className={`px-2 py-1 rounded transition
+                  ${active ? "bg-black text-white" : "bg-white hover:bg-gray-100 border"}`}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Distance */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-600">Distance:</span>
+        <div
+          role="radiogroup"
+          aria-label="Distance radius"
+          className="flex items-center gap-1 bg-white/90 rounded-xl shadow border p-1"
+        >
+          {DISTANCE_FILTERS.map((it) => {
+            const active = distance === it.key;
+            return (
+              <button
+                key={it.key}
+                role="radio"
+                aria-checked={active}
+                onClick={() => onDistanceChange(it.key)}
+                className={`px-2 py-1 rounded transition
+                  ${active ? "bg-black text-white" : "bg-white hover:bg-gray-100 border"}`}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
