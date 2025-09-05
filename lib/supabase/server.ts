@@ -12,8 +12,6 @@ export async function createSupabaseServer() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set() {},   // not allowed in Server Components
-        remove() {},// not allowed in Server Components
       },
     }
   );
