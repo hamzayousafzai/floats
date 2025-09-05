@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import EventCard, { type ExploreCardData } from "./EventCard"; // Updated import
+import EventCard, { type ExploreCardData } from "./EventCard";
 import MapFilters from "./MapFilters";
 import { Search } from "lucide-react";
 
 type Props = {
   cards: ExploreCardData[];
-  favoriteVendorIds: string[]; // Renamed for clarity
+  favoriteVendorIds: string[];
   typeOptions: string[];
 };
 
@@ -21,16 +21,17 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
     const searchMatch =
       searchQuery === "" ||
       card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (card.vendor && card.vendor.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      (card.vendor &&
+        card.vendor.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return categoryMatch && searchMatch;
   });
 
+  // This component is a full-height flex column that fills its parent.
   return (
-    <main className="flex h-full flex-col">
-      {/* Filters Container */}
-      <div className="bg-white p-4 border-b sticky top-0 z-20">
-        {/* Search Bar */}
-        <div className="relative mb-4">
+    <div className="h-full flex flex-col">
+      {/* Header: This div does not grow or shrink. It stays at the top. */}
+      <div className="shrink-0 bg-base-100 border-b p-4">
+        <div className="relative mb-3">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <Search className="h-4 w-4 text-gray-400" />
           </div>
@@ -39,11 +40,10 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
             placeholder="Search events or vendors..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full rounded-md border-gray-300 pl-9 shadow-sm focus:border-black focus:ring-black sm:text-sm"
+            className="input input-bordered w-full pl-9"
           />
         </div>
 
-        {/* Category Filters */}
         <MapFilters
           options={typeOptions}
           active={categoryFilter}
@@ -51,15 +51,17 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
         />
       </div>
 
-      {/* Results Grid */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
+      {/* Card List: This div takes all remaining space and scrolls internally. */}
+      <div className="flex-1 overflow-y-auto bg-base-200 p-4 pb-28">
         {filteredCards.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {filteredCards.map((card) => (
               <EventCard
                 key={card.id}
                 card={card}
-                isFavorite={!!card.vendor && favoriteVendorIds.includes(card.vendor.id)}
+                isFavorite={
+                  !!card.vendor && favoriteVendorIds.includes(card.vendor.id)
+                }
               />
             ))}
           </div>
@@ -70,6 +72,6 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

@@ -66,7 +66,7 @@ export default async function ExplorePage() {
   ];
 
   return (
-    <div className="h-full">
+    <div className="fixed inset-0">
       <ExploreView
         cards={cards}
         favoriteVendorIds={favoriteVendorIds}
