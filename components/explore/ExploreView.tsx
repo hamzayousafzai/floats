@@ -26,17 +26,16 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
     return categoryMatch && searchMatch;
   });
 
-  // The component now returns fragments, as the parent provides the main layout container.
+  // This component is a full-height flex column that fills its parent.
   return (
-    <>
-      {/* Fixed header within page */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <header className="shrink-0 bg-base-100 pb-2"></header>
-          <div className="relative mb-4">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
-            <input
+    <div className="h-full flex flex-col">
+      {/* Header: This div does not grow or shrink. It stays at the top. */}
+      <div className="shrink-0 bg-base-100 border-b p-4">
+        <div className="relative mb-3">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Search className="h-4 w-4 text-gray-400" />
+          </div>
+          <input
             type="text"
             placeholder="Search events or vendors..."
             value={searchQuery}
@@ -52,13 +51,8 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
         />
       </div>
 
-      {/* Only this area scrolls; add bottom padding so Dock doesn't cover items */}
-      <div className="
-              min-h-0 flex-1 overflow-y-auto
-              bg-base-200 p-4
-              pb-[calc(var(--floats-nav-total)+1rem)]
-              -mx-4 px-4
-              ">
+      {/* Card List: This div takes all remaining space and scrolls internally. */}
+      <div className="flex-1 overflow-y-auto bg-base-200 p-4 pb-28">
         {filteredCards.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
             {filteredCards.map((card) => (
@@ -78,6 +72,6 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
