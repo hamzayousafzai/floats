@@ -5,12 +5,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen flex flex-col">
       {/* Page content will fill the available space */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-hidden">
         {children}
       </main>
 
       {/* DaisyUI Dock for main navigation */}
-      <div className="dock dock-bottom dock-center z-50 mb-4 w-full max-w-screen-sm mx-auto rounded-box bg-base-100 shadow-lg pb-[env(safe-area-inset-bottom)]">
+      <div className="dock dock-bottom dock-center z-50">
         <Link href="/map" className="dock-item">
           <span className="text-xl"><Map /></span>
           <span className="dock-label">Map</span>

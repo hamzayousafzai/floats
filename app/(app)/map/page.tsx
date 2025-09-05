@@ -5,13 +5,8 @@ const MapCanvas = dynamic(() => import("@/components/map/MapCanvas"), { ssr: fal
 
 export default function MapPage() {
   return (
-    <div
-      className="relative"
-      style={{
-        height:
-          "calc(100dvh - var(--floats-header-total) - var(--floats-nav-total))",
-      }}
-    >
+    // Fixed to viewport; no scrolling; Dock will overlay
+    <div className="fixed inset-0">
       <MapCanvas />
     </div>
   );

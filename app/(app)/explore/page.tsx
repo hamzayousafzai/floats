@@ -66,7 +66,11 @@ export default async function ExplorePage() {
   ];
 
   return (
-    <div className="h-full">
+    <div className="
+      h-[calc(100svh-var(--floats-header-total))]
+      min-h-0
+      flex flex-col
+      px-4">
       <ExploreView
         cards={cards}
         favoriteVendorIds={favoriteVendorIds}
