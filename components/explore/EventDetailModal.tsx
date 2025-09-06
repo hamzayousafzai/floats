@@ -1,7 +1,7 @@
 "use client";
 
 import { type ExploreCardData } from "./EventCard";
-import { Calendar, MapPin, X } from "lucide-react";
+import { Calendar, MapPin, X, Download } from "lucide-react";
 import Image from "next/image";
 
 type Props = {
@@ -33,6 +33,15 @@ export default function EventDetailModal({ event, onClose }: Props) {
             </div>
           </div>
           <div className="modal-action">
+            {/* Use a standard <a> tag for file downloads */}
+            <a
+              href={`/api/events/${event.id}/ics?reminderDays=2`}
+              className="btn btn-outline"
+              download // The download attribute is still useful for desktop browsers
+            >
+              <Download className="h-4 w-4" />
+              Add to Calendar
+            </a>
             <button onClick={onClose} className="btn">Close</button>
           </div>
         </div>
