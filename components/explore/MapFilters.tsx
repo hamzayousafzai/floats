@@ -1,20 +1,31 @@
 "use client";
+
 import { useMemo } from "react";
 
-export default function TypeChips({
-  value, onChange, options, className,
-}: { value: string; onChange: (v: string)=>void; options: string[]; className?: string; }) {
-  const items = useMemo(()=>options, [options]);
+// Renamed component to match filename and props to match parent component
+export default function MapFilters({
+  active, // Changed from 'value' to 'active'
+  onChange,
+  options,
+  className,
+}: {
+  active: string;
+  onChange: (v: string) => void;
+  options: string[];
+  className?: string;
+}) {
+  const items = useMemo(() => options, [options]);
   return (
     <div className={`flex gap-2 overflow-x-auto no-scrollbar ${className ?? ""}`}>
       {items.map((opt) => {
-        const active = value === opt;
+        const isActive = active === opt; // Check against the 'active' prop
         return (
           <button
             key={opt}
             onClick={() => onChange(opt)}
-            className={`whitespace-nowrap rounded-full border px-3 py-1 text-sm
-              ${active ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
+            className={`btn btn-sm rounded-full capitalize
+              ${isActive ? "btn-neutral" : "btn-ghost"}
+            `}
           >
             {opt}
           </button>

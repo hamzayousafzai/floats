@@ -14,7 +14,7 @@ export default async function ExplorePage() {
   const { data: events, error } = await supabase
     .from("events")
     .select(`
-      id, title, starts_at, ends_at, address, image_url, is_market,
+      id, title, starts_at, ends_at, address, image_url, is_market, description,
       vendor:vendors ( id, slug, name, photo_url, category )
     `)
     .eq("status", "confirmed")
@@ -39,6 +39,7 @@ export default async function ExplorePage() {
       href: `/events/${e.id}`, // Future event detail page
       imageUrl: e.image_url ?? e.vendor?.photo_url ?? null,
       title: e.title,
+      description: e.description, // Add description to the card data
       // Use vendor category if it exists, otherwise determine from event type
       category: e.vendor?.category ?? (e.is_market ? "Market" : "Event"),
       starts_at: e.starts_at,

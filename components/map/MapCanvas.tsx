@@ -1,102 +1,68 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState, useCallback } from "react";
+import maplibregl, { type Map } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { EventPin } from "@/lib/types";
 import MapFilters, { type TimeFilter, type DistanceFilter } from "./MapFilters";
 import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
 
-// Helper to create a colored HTML element for the marker
 const createMarkerElement = (starts_at?: string): HTMLElement => {
-  const category = getEventTimeCategory(
-    starts_at ? new Date(starts_at) : undefined
-  );
-
-  // Define hex colors for each category
+  const category = getEventTimeCategory(starts_at ? new Date(starts_at) : undefined);
   let color = "#9ca3af"; // Default: gray-400
-  if (category === "today") {
-    color = "#22c55e"; // Green-500 for Today
-  } else if (category === "weekend") {
-    color = "#f59e0b"; // Amber-500 for Weekend
-  }
+  if (category === "today") color = "#22c55e"; // Green-500
+  else if (category === "weekend") color = "#f59e0b"; // Amber-500
 
   const el = document.createElement("div");
-  const width = 28;
-  const height = 36;
-
-  // A simple, modern SVG for the drop pin shape
-  const svgPin = `
-    <svg width="${width}" height="${height}" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  el.innerHTML = `
+    <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
       <path d="M14 0C6.268 0 0 6.268 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.268 21.732 0 14 0Z" fill="${color}"/>
       <circle cx="14" cy="14" r="5" fill="white"/>
-    </svg>
-  `;
-  el.innerHTML = svgPin;
-  // Apply styles directly to the element
+    </svg>`;
   el.style.cursor = "pointer";
-  el.style.transition = "transform 0.1s ease-in-out";
-
-  el.addEventListener("mousedown", (e) => {
-    e.stopPropagation();
-  });
-
   return el;
 };
 
-export default function MapCanvas() {
-  const mapRef = useRef<maplibregl.Map | null>(null);
+type Props = {
+  onPinClick: (event: EventPin) => void;
+};
+
+export default function MapCanvas({ onPinClick }: Props) {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const [time, setTime] = useState<TimeFilter>("today");
   const [distance, setDistance] = useState<DistanceFilter>("5");
 
-  useEffect(() => {
-    const map = new maplibregl.Map({
-      container: "map",
-      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-      center: [-80.8431, 35.2271], // Charlotte
-      zoom: 12,
+  const clearMarkers = () => {
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+  };
+
+  const fetchAndPlacePins = useCallback(async () => {
+    if (!mapRef.current) return; // Guard 1: Check before fetch
+
+    const b = mapRef.current.getBounds();
+    const params = new URLSearchParams({
+      minLng: b.getWest().toString(),
+      minLat: b.getSouth().toString(),
+      maxLng: b.getEast().toString(),
+      maxLat: b.getNorth().toString(),
+      when: time,
+      distance,
     });
-    mapRef.current = map;
 
-    const clearMarkers = () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-    };
+    try {
+      const res = await fetch(`/api/map/search?${params.toString()}`);
+      const data = (await res.json()) as EventPin[];
 
-    const fetchPins = async () => {
+      // Guard 2: Check again after await, in case component unmounted
       if (!mapRef.current) return;
-
-      const b = mapRef.current.getBounds();
-      const params = new URLSearchParams({
-        minLng: b.getWest().toString(),
-        minLat: b.getSouth().toString(),
-        maxLng: b.getEast().toString(),
-        maxLat: b.getNorth().toString(),
-        // Note: The RPC function doesn't use these yet, but we keep them for future filtering
-        when: time,
-        distance,
-      });
-
-      let payload: unknown = [];
-      try {
-        const res = await fetch(`/api/map/search?${params.toString()}`, {
-          cache: "no-store",
-        });
-        payload = await res.json();
-      } catch (e) {
-        console.error("Failed to fetch /api/map/search", e);
-      }
-
-      const data = Array.isArray(payload) ? (payload as EventPin[]) : [];
 
       clearMarkers();
 
       data.forEach((p) => {
-        // *** ADD THIS LINE FOR DEBUGGING ***
-        console.log("Data for pin:", p);
-
         const popupNode = createPinPopupContent({
           vendorSlug: p.vendorSlug,
           vendorName: p.vendorName,
@@ -107,31 +73,50 @@ export default function MapCanvas() {
         });
 
         const markerEl = createMarkerElement(p.starts_at);
-
-        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'center' })
+        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
           .setLngLat([p.lng, p.lat])
-          .setPopup(new maplibregl.Popup({ offset: 15 }).setDOMContent(popupNode))
-          .addTo(mapRef.current!);
+          .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popupNode))
+          .addTo(mapRef.current!); // This is now safe
+
+        marker.getElement().addEventListener("click", (e) => {
+          e.stopPropagation();
+          onPinClick(p);
+        });
 
         markersRef.current.push(marker);
       });
-    };
+    } catch (e) {
+      console.error("Failed to fetch map pins:", e);
+    }
+  }, [time, distance, onPinClick]);
 
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const handleMoveEnd = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(fetchPins, 300);
-    };
+  // Effect to initialize the map (runs only once)
+  useEffect(() => {
+    if (mapRef.current || !mapContainerRef.current) return;
 
-    map.on("load", fetchPins);
-    map.on("moveend", handleMoveEnd);
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+      center: [-80.8431, 35.2271], // Charlotte
+      zoom: 12,
+    });
+    mapRef.current = map;
+
+    map.on("load", fetchAndPlacePins);
+    map.on("moveend", fetchAndPlacePins);
 
     return () => {
-      if (timer) clearTimeout(timer);
-      clearMarkers();
       map.remove();
+      mapRef.current = null;
     };
-  }, [time, distance]);
+  }, [fetchAndPlacePins]);
+
+  // Effect to re-fetch pins when filters change
+  useEffect(() => {
+    if (mapRef.current?.isStyleLoaded()) {
+      fetchAndPlacePins();
+    }
+  }, [fetchAndPlacePins]);
 
   return (
     <div className="w-full h-full relative">
@@ -143,7 +128,7 @@ export default function MapCanvas() {
           onDistanceChange={setDistance}
         />
       </div>
-      <div id="map" className="absolute inset-0 w-full h-full" />
+      <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
     </div>
   );
 }
