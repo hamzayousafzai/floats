@@ -72,17 +72,17 @@ export default function MapCanvas({ onPinClick }: Props) {
           address: p.address ?? undefined,
         });
 
-        const markerEl = createMarkerElement(p.starts_at);
-        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
-          .setLngLat([p.lng, p.lat])
-          .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popupNode))
-          .addTo(mapRef.current!); // This is now safe
-
-        marker.getElement().addEventListener("click", (e) => {
-          e.stopPropagation();
+        popupNode.addEventListener("click", () => {
           onPinClick(p);
         });
 
+        const markerEl = createMarkerElement(p.starts_at);
+        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
+          .setLngLat([p.lng, p.lat])
+          .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
+          .addTo(mapRef.current!);
+
+        // We no longer need a direct click listener on the pin itself.
         markersRef.current.push(marker);
       });
     } catch (e) {

@@ -102,10 +102,10 @@ export function createPinPopupContent(pin: PinData): HTMLElement {
   }
 
   const wrapper = document.createElement("div");
-  wrapper.className = `w-56 rounded-lg border bg-white shadow-lg overflow-hidden border-t-4 ${colorClass}`;
+  wrapper.className = `relative w-56 rounded-md bg-white overflow-hidden ${colorClass} cursor-pointer`;
 
   const content = document.createElement("div");
-  content.className = "p-3 space-y-1.5";
+  content.className = "p-1.5 pr-8 space-y-0.5";
   wrapper.appendChild(content);
 
   if (pin.title) {
@@ -134,6 +134,11 @@ export function createPinPopupContent(pin: PinData): HTMLElement {
     addressEl.textContent = pin.address;
     content.appendChild(addressEl);
   }
+
+  const expandIcon = document.createElement("div");
+  expandIcon.className = "absolute top-1/2 right-2 -translate-y-1/2 text-gray-400";
+  expandIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+  wrapper.appendChild(expandIcon);
 
   return wrapper;
 }
