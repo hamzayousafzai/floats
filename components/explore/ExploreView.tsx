@@ -4,6 +4,7 @@ import { useState } from "react";
 import EventCard, { type ExploreCardData } from "./EventCard";
 import MapFilters from "./MapFilters";
 import { Search } from "lucide-react";
+import EventDetailModal from "./EventDetailModal"; // Import the new component
 
 type Props = {
   cards: ExploreCardData[];
@@ -14,6 +15,7 @@ type Props = {
 export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: Props) {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
 
   const filteredCards = cards.filter((card) => {
     const categoryMatch =
@@ -26,7 +28,14 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
     return categoryMatch && searchMatch;
   });
 
-  // This component is a full-height flex column that fills its parent.
+  const handleCardClick = (card: ExploreCardData) => {
+    setSelectedEvent(card);
+  };
+
+  const closeModal = () => {
+    setSelectedEvent(null);
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* Header: This div does not grow or shrink. It stays at the top. */}
@@ -47,31 +56,28 @@ export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: P
         <MapFilters
           options={typeOptions}
           active={categoryFilter}
-          onSelect={setCategoryFilter}
+          onChange={setCategoryFilter}
         />
       </div>
 
       {/* Card List: This div takes all remaining space and scrolls internally. */}
       <div className="flex-1 overflow-y-auto bg-base-200 p-4 pb-28">
-        {filteredCards.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {filteredCards.map((card) => (
-              <EventCard
-                key={card.id}
-                card={card}
-                isFavorite={
-                  !!card.vendor && favoriteVendorIds.includes(card.vendor.id)
-                }
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center text-gray-500 mt-8">
-            <p>No results found.</p>
-            <p className="text-sm">Try adjusting your search or filters.</p>
-          </div>
-        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {filteredCards.map((card) => (
+            <EventCard
+              key={card.id}
+              card={card}
+              isFavorite={
+                !!card.vendor && favoriteVendorIds.includes(card.vendor.id)
+              }
+              onClick={handleCardClick}
+            />
+          ))}
+        </div>
       </div>
+
+      {/* Use the reusable modal component */}
+      <EventDetailModal event={selectedEvent} onClose={closeModal} />
     </div>
   );
 }

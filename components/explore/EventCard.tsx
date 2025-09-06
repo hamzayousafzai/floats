@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, MapPin, Store } from "lucide-react";
+import { Calendar, MapPin, Store, Heart } from "lucide-react";
 import FavoriteButton from "@/components/FavoriteButton";
 
 // This is our new, unified data shape for a card on the Explore page.
@@ -11,94 +11,92 @@ export type ExploreCardData = {
   href: string;
   imageUrl: string | null;
   title: string;
+  description: string | null; // Add description
   category: string;
   starts_at: string;
-  address: string | null;
-  vendor: {
-    id: string;
-    name: string;
-    slug: string;
-  } | null;
+  address: string;
+  vendor: { id: string; name: string; slug: string } | null;
 };
 
 type Props = {
   card: ExploreCardData;
   isFavorite: boolean; // Is the associated VENDOR favorited?
+  onClick: (card: ExploreCardData) => void; // Add onClick handler prop
 };
 
-export default function EventCard({ card, isFavorite }: Props) {
-  return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/[0.06] transition hover:shadow-md">
-      {/* Main link for the entire card */}
-      <Link href={card.href} className="contents" />
+export default function EventCard({ card, isFavorite, onClick }: Props) {
+  const eventDate = new Date(card.starts_at);
+  const formattedDate = eventDate.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 
-      {/* Media */}
-      <div className="relative h-40 w-full overflow-hidden">
+  return (
+    // Changed from Link to a clickable div
+    <div
+      onClick={() => onClick(card)}
+      className="card card-compact bg-base-100 shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+    >
+      <figure className="relative h-40 bg-gray-200">
         {card.imageUrl ? (
           <Image
             src={card.imageUrl}
             alt={card.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 480px) 100vw, 240px"
+            layout="fill"
+            objectFit="cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-            <Store className="h-10 w-10 text-gray-400" />
+          <div className="flex items-center justify-center h-full w-full">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-12 w-12 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1}
+                d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1}
+                d="M12 18V6M6 12h12"
+              />
+            </svg>
           </div>
         )}
-
-        {/* Favorite button only shows if there's an associated vendor */}
-        {card.vendor && (
-          <div className="absolute right-2 top-2 z-10">
-            <FavoriteButton vendorId={card.vendor.id} isFavorite={isFavorite} />
+      </figure>
+      <div className="card-body">
+        <div className="flex justify-between items-start">
+          <div>
+            <p className="text-xs uppercase font-semibold text-gray-500">
+              {card.category}
+            </p>
+            <h2 className="card-title text-base">{card.title}</h2>
           </div>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="flex flex-1 flex-col p-4 space-y-2">
-        <div className="flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{card.category}</p>
-          <h3 className="text-base font-semibold leading-tight line-clamp-2 mt-1">
-            {card.title}
-          </h3>
-        </div>
-
-        <div className="space-y-1 text-xs text-gray-700">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-            <span>
-              {new Date(card.starts_at).toLocaleDateString(undefined, {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit'
-              })}
-            </span>
-          </div>
-          {card.address && (
-            <div className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">{card.address}</span>
-            </div>
+          {isFavorite && (
+            <Heart className="h-5 w-5 text-red-500 fill-current" />
           )}
         </div>
-
-        {/* Vendor Chip */}
-        {card.vendor && (
-          <div className="pt-2">
-            <Link
-              href={`/vendor/${card.vendor.slug}`}
-              onClick={(e) => e.stopPropagation()} // Prevents navigating to the event page
-              className="inline-block rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800 transition hover:bg-gray-200"
-            >
-              By: {card.vendor.name}
-            </Link>
+        <div className="mt-2 space-y-1 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            <span>{formattedDate}</span>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            <span>{card.address}</span>
+          </div>
+        </div>
       </div>
-    </article>
+    </div>
   );
 }
