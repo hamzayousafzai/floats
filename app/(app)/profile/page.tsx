@@ -16,7 +16,17 @@ export default async function ProfilePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Favorites (raw)
+  // Check for admin status in the 'app_admins' table.
+  const { data: adminRecord } = await supabase
+    .from("app_admins")
+    .select("user_id") // We just need to check if a row exists
+    .eq("user_id", user.id)
+    .single();
+
+  // If a record exists for this user in app_admins, they are an admin.
+  const isAdmin = !!adminRecord;
+
+  // Favorites (raw) - This logic remains the same
   const { data: favRows } = await supabase
     .from("favorites")
     .select("id,vendor_id")
@@ -42,7 +52,6 @@ export default async function ProfilePage() {
   }));
 
   const favoriteCount = favorites.filter(f => f.vendor).length;
-  // Placeholder visited count (MVP: could be derived from events attended)
   const visitedCount = 12; // TODO: replace with real metric later
 
   const initials = (user.user_metadata?.name || user.email || "?")
@@ -82,6 +91,15 @@ export default async function ProfilePage() {
               <div className="text-xs text-gray-500">Visited</div>
             </div>
         </section>
+
+        {/* Admin Panel Button (conditionally rendered) */}
+        {isAdmin && (
+          <section>
+            <Link href="/admin" className="btn btn-outline w-full">
+              Admin Panel
+            </Link>
+          </section>
+        )}
 
         {/* Favorites List */}
         <section>
