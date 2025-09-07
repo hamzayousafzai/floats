@@ -3,48 +3,84 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function AdminNewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  // Use createBrowserClient for client-side Supabase interactions
+  const [supabase] = useState(() => createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ));
+
   const [form, setForm] = useState({
     title: "",
     description: "",
     starts_at: "",
     ends_at: "",
     address: "",
-    image_url: "",
     is_market: false,
     vendor_id: "",
-    coords: "", // Replaces lat and lng
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   function update<K extends keyof typeof form>(k: K, v: any) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null;
+    setImageFile(file);
+    if (file) {
+      setImagePreview(URL.createObjectURL(file));
+    } else {
+      setImagePreview(null);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
+
     try {
-      const payload: any = { ...form };
-      // Only send coords if they are filled and no vendor_id is present
-      if (payload.vendor_id) {
-        delete payload.coords;
+      let imageUrl: string | null = null;
+
+      // 1. If an image file is selected, upload it first.
+      if (imageFile) {
+        const filePath = `public/${Date.now()}-${imageFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("event-images")
+          .upload(filePath, imageFile);
+
+        if (uploadError) {
+          throw new Error(`Image upload failed: ${uploadError.message}`);
+        }
+
+        // 2. Get the public URL of the uploaded file.
+        const { data: urlData } = supabase.storage
+          .from("event-images")
+          .getPublicUrl(filePath);
+        
+        imageUrl = urlData.publicUrl;
       }
 
+      // 3. Send the form data (with the new image URL) to your API route.
       const res = await fetch("/admin/events/new/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...form, image_url: imageUrl }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Request failed" }));
         throw new Error(data.error || "An unknown error occurred.");
       }
-      // On success, navigate to the main admin page
-      router.push("/admin");
+      
+      router.push("/admin/events");
+      router.refresh(); // Refresh server components on the target page
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -78,10 +114,23 @@ export default function AdminNewEventPage() {
           <label className="font-medium">Address</label>
           <input required value={form.address} onChange={(e) => update("address", e.target.value)} className="mt-1 w-full rounded border p-2" />
         </div>
+
+        {/* New File Input for Image Upload */}
         <div>
-          <label className="font-medium">Image URL (Optional)</label>
-          <input value={form.image_url} onChange={(e) => update("image_url", e.target.value)} className="mt-1 w-full rounded border p-2" placeholder="https://..." />
+          <label className="font-medium">Event Image (Optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {imagePreview && (
+            <div className="mt-4">
+              <img src={imagePreview} alt="Image preview" className="w-48 h-auto rounded-lg" />
+            </div>
+          )}
         </div>
+
         <div className="flex items-center gap-2 pt-2">
           <input id="is_market" type="checkbox" checked={form.is_market} onChange={(e) => update("is_market", e.target.checked)} className="h-4 w-4 rounded" />
           <label htmlFor="is_market">This is a market-style event</label>
@@ -89,20 +138,6 @@ export default function AdminNewEventPage() {
         <div>
           <label className="font-medium">Vendor ID (Optional)</label>
           <input value={form.vendor_id} onChange={(e) => update("vendor_id", e.target.value)} className="mt-1 w-full rounded border p-2" placeholder="Leave blank for a standalone event" />
-        </div>
-        <div className="p-3 border rounded bg-gray-50">
-          <div>
-            <label className="font-medium">Coordinates</label>
-            <input 
-              required 
-              type="text" 
-              placeholder="e.g., (35.2271, -80.8431)"
-              value={form.coords} 
-              onChange={e=>update("coords", e.target.value)} 
-              className="mt-1 w-full rounded border p-2" 
-            />
-            <p className="text-xs text-gray-500 mt-1">Enter as comma-separated latitude, longitude.</p>
-          </div>
         </div>
 
         <div className="flex items-center gap-2 pt-2">
