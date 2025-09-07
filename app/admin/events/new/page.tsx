@@ -12,11 +12,10 @@ export default function AdminNewEventPage() {
     description: "",
     starts_at: "",
     ends_at: "",
-    address: "",
+    address: "", // Address is now the only required location field
     image_url: "",
     is_market: false,
     vendor_id: "",
-    coords: "", // Replaces lat and lng
   });
 
   function update<K extends keyof typeof form>(k: K, v: any) {
@@ -27,16 +26,11 @@ export default function AdminNewEventPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload: any = { ...form };
-      // Only send coords if they are filled and no vendor_id is present
-      if (payload.vendor_id) {
-        delete payload.coords;
-      }
-
+      // The payload is now just the form state. No need to handle 'coords'.
       const res = await fetch("/admin/events/new/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       });
 
       if (!res.ok) {
@@ -44,7 +38,7 @@ export default function AdminNewEventPage() {
         throw new Error(data.error || "An unknown error occurred.");
       }
       // On success, navigate to the main admin page
-      router.push("/admin");
+      router.push("/admin/events");
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -90,20 +84,8 @@ export default function AdminNewEventPage() {
           <label className="font-medium">Vendor ID (Optional)</label>
           <input value={form.vendor_id} onChange={(e) => update("vendor_id", e.target.value)} className="mt-1 w-full rounded border p-2" placeholder="Leave blank for a standalone event" />
         </div>
-        <div className="p-3 border rounded bg-gray-50">
-          <div>
-            <label className="font-medium">Coordinates</label>
-            <input 
-              required 
-              type="text" 
-              placeholder="e.g., (35.2271, -80.8431)"
-              value={form.coords} 
-              onChange={e=>update("coords", e.target.value)} 
-              className="mt-1 w-full rounded border p-2" 
-            />
-            <p className="text-xs text-gray-500 mt-1">Enter as comma-separated latitude, longitude.</p>
-          </div>
-        </div>
+
+        {/* The coordinates input field has been removed. */}
 
         <div className="flex items-center gap-2 pt-2">
           <button disabled={saving} className="rounded bg-black text-white px-5 py-2 text-sm font-medium disabled:opacity-50">

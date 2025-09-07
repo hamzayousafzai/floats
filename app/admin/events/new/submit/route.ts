@@ -10,55 +10,23 @@ type Body = {
   image_url?: string;
   is_market?: boolean;
   vendor_id?: string;
-  coords?: string;
   status?: string;
 };
 
 export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServer();
-
     const body = (await req.json()) as Partial<Body>;
-    const { title, starts_at, address, vendor_id, coords } = body;
+    const { title, starts_at, address } = body;
 
+    // Basic validation
     if (!title || !starts_at || !address) {
       return NextResponse.json({ error: "Missing required fields: title, starts_at, address" }, { status: 400 });
     }
 
-    let geomWkt: string | null = null;
-
-    // If a vendor_id is provided, use its location for the event pin
-    if (vendor_id) {
-      const { data: vendor } = await supabase.from("vendors").select("geom").eq("id", vendor_id).single();
-      if (vendor?.geom) {
-        geomWkt = vendor.geom as unknown as string;
-      }
-    }
-
-    // If no vendor location, use the manually entered lat/lng
-    if (!geomWkt) {
-      if (coords) {
-        // Parse the "lat, lng" string, now robustly handling parentheses
-        const parts = coords.replace(/[()]/g, '').split(',').map(s => s.trim());
-        
-        if (parts.length === 2) {
-          const lat = parseFloat(parts[0]);
-          const lng = parseFloat(parts[1]);
-
-          if (!isNaN(lat) && !isNaN(lng)) {
-            geomWkt = `SRID=4326;POINT(${lng} ${lat})`;
-          } else {
-            return NextResponse.json({ error: "Invalid coordinates format. Could not parse numbers." }, { status: 400 });
-          }
-        } else {
-          return NextResponse.json({ error: "Invalid coordinates format. Expected 'latitude, longitude'." }, { status: 400 });
-        }
-      } else {
-        return NextResponse.json({ error: "An event must have a location, either from a vendor or manual coordinates." }, { status: 400 });
-      }
-    }
-
-    const { error } = await supabase.from("events").insert({
+    // The database trigger will handle geocoding the address automatically.
+    // We no longer need to handle 'coords' or 'geom' here.
+    const { data, error } = await supabase.from("events").insert({
       title: body.title,
       description: body.description || null,
       starts_at: new Date(body.starts_at).toISOString(),
@@ -68,15 +36,15 @@ export async function POST(req: Request) {
       is_market: !!body.is_market,
       vendor_id: body.vendor_id || null,
       status: body.status || "confirmed",
-      geom: geomWkt,
-    });
+      // latitude and longitude are left null; the trigger will fill them in.
+    }).select().single();
 
     if (error) {
       console.error("Supabase insert error:", error);
       return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, eventId: data.id });
   } catch (e: any) {
     console.error("API route error:", e);
     return NextResponse.json({ error: "An internal server error occurred." }, { status: 500 });

@@ -94,11 +94,22 @@ export default function MapCanvas({ onPinClick }: Props) {
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
+    // Define the bounding box for the Charlotte area.
+    // Format: [Southwest longitude, Southwest latitude, Northeast longitude, Northeast latitude]
+    const maxBounds: [number, number, number, number] = [
+      -81.2, // West boundary
+      35.0,  // South boundary
+      -80.5, // East boundary
+      35.5   // North boundary
+    ];
+
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
       center: [-80.8431, 35.2271], // Charlotte
       zoom: 12,
+      minZoom: 10,
+      maxBounds: maxBounds,
     });
     mapRef.current = map;
 

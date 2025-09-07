@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 export type TimeFilter = "today" | "weekend" | "month";
-export type DistanceFilter = "1" | "5" | "10";
+export type DistanceFilter = "5" | "10" | "20";
 
 interface MapFiltersProps {
   time: TimeFilter;
@@ -15,14 +15,14 @@ interface MapFiltersProps {
 
 const TIME_FILTERS: { key: TimeFilter; label: string }[] = [
   { key: "today", label: "Today" },
-  { key: "weekend", label: "Weekend" },
+  { key: "weekend", label: "This Week" },
   { key: "month", label: "This Month" },
 ];
 
 const DISTANCE_FILTERS: { key: DistanceFilter; label: string }[] = [
-  { key: "1", label: "1 mile" },
-  { key: "5", label: "5 miles" },
+  { key: "5", label: "5 mile" },
   { key: "10", label: "10 miles" },
+  { key: "20", label: "20 miles" },
 ];
 
 export default function MapFilters({
