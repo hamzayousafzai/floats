@@ -1,9 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import Cropper from "react-easy-crop";
+import { type Area } from "react-easy-crop";
+
+// Helper function to create a cropped image blob
+const createCroppedImage = (
+  imageSrc: string,
+  pixelCrop: Area
+): Promise<Blob | null> => {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.src = imageSrc;
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+
+      ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+      );
+
+      canvas.toBlob((blob) => {
+        resolve(blob);
+      }, "image/jpeg", 0.9);
+    };
+  });
+};
 
 type EventDateTime = {
   starts_at: string;
@@ -13,36 +54,51 @@ type EventDateTime = {
 export default function AdminNewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [supabase] = useState(() => createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ));
+  const [supabase] = useState(() => createSupabaseBrowserClient());
 
   const [form, setForm] = useState({
     title: "",
     description: "",
     address: "",
-    vendor_name: "", // Changed from vendor_id
+    vendor_name: "",
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Cropper state
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const aspect = 16 / 9;
+
   const [isRecurring, setIsRecurring] = useState(false);
   const [datetimes, setDatetimes] = useState<EventDateTime[]>([
     { starts_at: "", ends_at: "" },
   ]);
 
-  function updateForm<K extends keyof typeof form>(k: K, v: any) {
-    setForm((f) => ({ ...f, [k]: v }));
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setOriginalFile(file);
+      let imageDataUrl = await readFile(file);
+      setImageSrc(imageDataUrl as string);
+    }
+  };
+
+  function readFile(file: File): Promise<string | ArrayBuffer | null> {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result), false);
+      reader.readAsDataURL(file);
+    });
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] || null;
-    setImageFile(file);
-    if (file) {
-      setImagePreview(URL.createObjectURL(file));
-    } else {
-      setImagePreview(null);
-    }
+  function updateForm<K extends keyof typeof form>(k: K, v: any) {
+    setForm((f) => ({ ...f, [k]: v }));
   }
 
   function handleDateChange(index: number, field: keyof EventDateTime, value: string) {
@@ -67,22 +123,22 @@ export default function AdminNewEventPage() {
     try {
       let imageUrl: string | null = null;
 
-      if (imageFile) {
-        const filePath = `public/${Date.now()}-${imageFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from("event-images")
-          .upload(filePath, imageFile);
+      if (imageSrc && croppedAreaPixels && originalFile) {
+        const croppedImageBlob = await createCroppedImage(imageSrc, croppedAreaPixels);
+        if (croppedImageBlob) {
+          const filePath = `public/${Date.now()}-${originalFile.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from("event-images")
+            .upload(filePath, croppedImageBlob, { contentType: "image/jpeg" });
 
-        if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
-        
-        const { data: urlData } = supabase.storage
-          .from("event-images")
-          .getPublicUrl(filePath);
-        imageUrl = urlData.publicUrl;
+          if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
+
+          const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(filePath);
+          imageUrl = urlData.publicUrl;
+        }
       }
 
-      // Create an array of event objects to insert
-      const eventsToCreate = datetimes.map(dt => ({
+      const eventsToCreate = datetimes.map((dt) => ({
         ...form,
         starts_at: dt.starts_at,
         ends_at: dt.ends_at || null,
@@ -92,14 +148,14 @@ export default function AdminNewEventPage() {
       const res = await fetch("/admin/events/new/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(eventsToCreate), // Send array
+        body: JSON.stringify(eventsToCreate),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Request failed" }));
         throw new Error(data.error || "An unknown error occurred.");
       }
-      
+
       router.push("/admin/events");
       router.refresh();
     } catch (err: any) {
@@ -164,10 +220,24 @@ export default function AdminNewEventPage() {
           )}
         </div>
 
+        {/* Image Upload and Cropper */}
         <div>
           <label className="font-medium">Event Image (Optional)</label>
-          <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-          {imagePreview && <div className="mt-4"><img src={imagePreview} alt="Image preview" className="w-48 h-auto rounded-lg" /></div>}
+          <input type="file" accept="image/*" onChange={onFileChange} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+          
+          {imageSrc && (
+            <div className="mt-4 relative h-64 w-full bg-gray-100 rounded-lg">
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={aspect}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 pt-2">

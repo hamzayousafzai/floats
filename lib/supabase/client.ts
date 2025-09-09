@@ -1,7 +1,11 @@
-// lib/supabase/client.ts
+"use client";
+
 import { createBrowserClient } from "@supabase/ssr";
 
-export const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// This function creates a new client instance.
+export function createSupabaseBrowserClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
