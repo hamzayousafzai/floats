@@ -1,52 +1,92 @@
-import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
 
-type Body = {
-  title: string;
-  description?: string;
-  starts_at: string;
-  ends_at?: string;
-  address: string;
-  image_url?: string;
-  is_market?: boolean;
-  vendor_id?: string;
-  status?: string;
-};
+// Helper function to generate a URL-friendly slug from a name
+function slugify(text: string): string {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-") // Replace spaces with -
+    .replace(/[^\w-]+/g, "") // Remove all non-word chars
+    .replace(/--+/g, "-"); // Replace multiple - with single -
+}
 
 export async function POST(req: Request) {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: admin } = await supabase.from("app_admins").select("user_id").eq("user_id", user.id).single();
+  if (!admin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
-    const supabase = await createSupabaseServer();
-    const body = (await req.json()) as Partial<Body>;
-    const { title, starts_at, address } = body;
+    const eventsPayload = await req.json();
+    const eventsToProcess = Array.isArray(eventsPayload) ? eventsPayload : [eventsPayload];
 
-    // Basic validation
-    if (!title || !starts_at || !address) {
-      return NextResponse.json({ error: "Missing required fields: title, starts_at, address" }, { status: 400 });
+    if (eventsToProcess.length === 0 || !eventsToProcess[0].vendor_name) {
+      return NextResponse.json({ error: "No event data or vendor name provided" }, { status: 400 });
     }
 
-    // The database trigger will handle geocoding the address automatically.
-    // We no longer need to handle 'coords' or 'geom' here.
-    const { data, error } = await supabase.from("events").insert({
-      title: body.title,
-      description: body.description || null,
-      starts_at: new Date(body.starts_at).toISOString(),
-      ends_at: body.ends_at ? new Date(body.ends_at).toISOString() : null,
-      address: body.address,
-      image_url: body.image_url || null,
-      is_market: !!body.is_market,
-      vendor_id: body.vendor_id || null,
-      status: body.status || "confirmed",
-      // latitude and longitude are left null; the trigger will fill them in.
-    }).select().single();
+    const vendorName = eventsToProcess[0].vendor_name;
+    let vendorId: string;
 
-    if (error) {
-      console.error("Supabase insert error:", error);
-      return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 });
+    // Step 1: Find or Create the Vendor
+    const { data: existingVendor, error: findError } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("name", vendorName)
+      .single();
+
+    if (existingVendor) {
+      vendorId = existingVendor.id;
+    } else if (findError && findError.code === 'PGRST116') { // PGRST116 means no rows found
+      // Vendor not found, so we create it
+      const { data: newVendor, error: createError } = await supabase
+        .from("vendors")
+        .insert({
+          name: vendorName,
+          slug: slugify(vendorName),
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
+
+      if (createError) {
+        // This could happen if the generated slug already exists, or another issue.
+        throw new Error(`Could not create new vendor: ${createError.message}`);
+      }
+      vendorId = newVendor!.id;
+    } else if (findError) {
+      // A different database error occurred during the find query
+      throw new Error(`Error finding vendor: ${findError.message}`);
     }
 
-    return NextResponse.json({ ok: true, eventId: data.id });
+    // Step 2: Prepare events with the correct vendor_id
+    const eventsToInsert = eventsToProcess.map(event => {
+      const { vendor_name, ...rest } = event; // Remove vendor_name
+      return {
+        ...rest,
+        vendor_id: vendorId!, // Add the resolved vendor_id
+      };
+    });
+
+    // Step 3: Insert the events
+    const { error: insertError } = await supabase.from("events").insert(eventsToInsert);
+
+    if (insertError) {
+      console.error("Supabase insert error:", insertError);
+      return NextResponse.json({ error: `Database error: ${insertError.message}` }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error("API route error:", e);
-    return NextResponse.json({ error: "An internal server error occurred." }, { status: 500 });
+    return NextResponse.json({ error: e.message || "An internal server error occurred." }, { status: 500 });
   }
 }

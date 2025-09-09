@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     const pins = (data ?? []).map((row: any) => ({
       id: row.event_id,
       title: row.title,
+      description: row.description, // Add this line
       starts_at: row.starts_at,
       ends_at: row.ends_at,
       address: row.address,
