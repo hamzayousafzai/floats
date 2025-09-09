@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import maplibregl, { type Map } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -34,6 +34,9 @@ export default function MapCanvas({ onPinClick }: Props) {
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const [time, setTime] = useState<TimeFilter>("today");
   const [distance, setDistance] = useState<DistanceFilter>("5");
+  const abortRef = useRef<AbortController | null>(null);
+  const reqIdRef = useRef(0);
+  const debounceRef = useRef<number | null>(null);
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
@@ -41,24 +44,45 @@ export default function MapCanvas({ onPinClick }: Props) {
   };
 
   const fetchAndPlacePins = useCallback(async () => {
-    if (!mapRef.current) return; // Guard 1: Check before fetch
+    if (!mapRef.current) return;
+
+    // Abort previous request
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const b = mapRef.current.getBounds();
+
+    // Add a small padding to reduce edge flicker (5% of span)
+    const padLng = (b.getEast() - b.getWest()) * 0.05;
+    const padLat = (b.getNorth() - b.getSouth()) * 0.05;
+
+    const minLng = b.getWest() - padLng;
+    const minLat = b.getSouth() - padLat;
+    const maxLng = b.getEast() + padLng;
+    const maxLat = b.getNorth() + padLat;
+
     const params = new URLSearchParams({
-      minLng: b.getWest().toString(),
-      minLat: b.getSouth().toString(),
-      maxLng: b.getEast().toString(),
-      maxLat: b.getNorth().toString(),
-      when: time,
-      distance,
+      minLng: String(minLng),
+      minLat: String(minLat),
+      maxLng: String(maxLng),
+      maxLat: String(maxLat),
+      when: time, // today | week | month | weekend
+      distance,   // if you still send it
     });
 
+    const myReqId = ++reqIdRef.current;
+
     try {
-      const res = await fetch(`/api/map/search?${params.toString()}`);
+      const res = await fetch(`/api/map/search?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const data = (await res.json()) as EventPin[];
 
-      // Guard 2: Check again after await, in case component unmounted
-      if (!mapRef.current) return;
+      // Drop out-of-date responses
+      if (!mapRef.current || myReqId !== reqIdRef.current) return;
 
       clearMarkers();
 
@@ -72,23 +96,39 @@ export default function MapCanvas({ onPinClick }: Props) {
           address: p.address ?? undefined,
         });
 
-        popupNode.addEventListener("click", () => {
-          onPinClick(p);
-        });
+        popupNode.addEventListener("click", () => onPinClick(p));
 
         const markerEl = createMarkerElement(p.starts_at);
-        const marker = new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
+        const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
           .setLngLat([p.lng, p.lat])
           .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
           .addTo(mapRef.current!);
 
-        // We no longer need a direct click listener on the pin itself.
         markersRef.current.push(marker);
       });
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === "AbortError") return; // ignore canceled
       console.error("Failed to fetch map pins:", e);
     }
   }, [time, distance, onPinClick]);
+
+  // Debounce moveend to avoid spamming the API while zooming/panning
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const handler = () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = window.setTimeout(() => {
+        fetchAndPlacePins();
+      }, 150);
+    };
+
+    mapRef.current.on("moveend", handler);
+    return () => {
+      mapRef.current?.off("moveend", handler);
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [fetchAndPlacePins]);
 
   // Effect to initialize the map (runs only once)
   useEffect(() => {
@@ -114,7 +154,6 @@ export default function MapCanvas({ onPinClick }: Props) {
     mapRef.current = map;
 
     map.on("load", fetchAndPlacePins);
-    map.on("moveend", fetchAndPlacePins);
 
     return () => {
       map.remove();
