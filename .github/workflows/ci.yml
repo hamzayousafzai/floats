@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+# Cancel older runs for the same PR/branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup (cache deps)
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.cache-deps.outputs.cache-hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # keep telemetry off in CI
+          NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**/*.[jt]s','**/*.[jt]sx','**/*.json','**/*.css') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}-
+
+  lint_typecheck:
+    name: Lint & Typecheck
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install deps (from cache)
+        run: npm ci
+      - name: Lint
+        run: npm run lint --silent
+      - name: Typecheck (no emit)
+        run: npx tsc --noEmit
+
+  build:
+    name: Build
+    needs: [setup, lint_typecheck]
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      # Optional: define minimal env so Next can build without hitting live services
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+      NODE_ENV: production
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install deps (from cache)
+        run: npm ci
+      - name: Build (Next.js / Turbopack)
+        run: npm run build
