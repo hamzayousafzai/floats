@@ -14,7 +14,8 @@ export default async function ExplorePage() {
   const { data: events, error } = await supabase
     .from("events")
     .select(`
-      id, title, starts_at, ends_at, address, image_url, is_market, description,
+      id, title, starts_at, ends_at, address, latitude,
+      longitude, image_url, is_market, description,
       vendor:vendors ( id, slug, name, photo_url, category )
     `)
     .eq("status", "confirmed")

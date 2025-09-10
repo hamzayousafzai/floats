@@ -1,7 +1,7 @@
 "use client";
 
 import { type ExploreCardData } from "./EventCard";
-import { Calendar, MapPin, X, Download } from "lucide-react";
+import { Calendar, MapPin, X, Download, Navigation } from "lucide-react"; // Import Navigation icon
 import Image from "next/image";
 
 type Props = {
@@ -10,6 +10,24 @@ type Props = {
 };
 
 export default function EventDetailModal({ event, onClose }: Props) {
+  // Function to generate the correct maps URL
+  const getDirectionsUrl = () => {
+    if (!event) return "#";
+
+    // Prefer using lat/lng for accuracy
+    if (event.latitude && event.longitude) {
+      return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
+    }
+    // Fallback to address if coordinates are not available
+    if (event.address) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`;
+    }
+    
+    return "#";
+  };
+
+  const canGetDirections = !!(event?.address || (event?.latitude && event?.longitude));
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
@@ -33,16 +51,26 @@ export default function EventDetailModal({ event, onClose }: Props) {
             </div>
           </div>
           <div className="modal-action">
-            {/* Use a standard <a> tag for file downloads */}
+            {/* Get Directions Button */}
+            {canGetDirections && (
+              <a
+                href={getDirectionsUrl()}
+                target="_blank" // Open in a new tab/native app
+                rel="noopener noreferrer"
+                className="btn btn-outline"
+              >
+                <Navigation className="h-4 w-4" />
+                Get Directions
+              </a>
+            )}
             <a
               href={`/api/events/${event.id}/ics?reminderDays=2`}
               className="btn btn-outline"
-              download // The download attribute is still useful for desktop browsers
+              download
             >
               <Download className="h-4 w-4" />
               Add to Calendar
             </a>
-            <button onClick={onClose} className="btn">Close</button>
           </div>
         </div>
       )}
