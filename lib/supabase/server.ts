@@ -2,16 +2,19 @@ import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 /** Server client for Server Components (read-only cookies) */
-export async function createSupabaseServer() {
-  const cookieStore = await cookies();
+export function createSupabaseServer() {
+  const cookieStore = cookies();
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
+        get: async (name: string) => {
+          const cookieStore = await cookies();
           return cookieStore.get(name)?.value;
         },
+        // No 'set' or 'remove' needed, the middleware does that
       },
     }
   );
