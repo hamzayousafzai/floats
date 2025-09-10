@@ -12,6 +12,8 @@ export type ExploreCardData = {
   imageUrl: string | null;
   title: string;
   description: string | null; // Add description
+  latitude: number | null; // Add latitude
+  longitude: number | null;
   category: string;
   starts_at: string;
   address: string;
