@@ -33,9 +33,9 @@ export default function EventDetailModal({ event, onClose }: Props) {
       {event && (
         <div className="modal-box">
           <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"><X /></button>
-          {event.imageUrl && (
+          {event.image_url && (
             <figure className="relative h-48 -mx-6 -mt-6 mb-4 bg-gray-200 rounded-t-lg overflow-hidden">
-              <Image src={event.imageUrl} alt={event.title} layout="fill" objectFit="cover" />
+              <Image src={event.image_url} alt={event.title} fill className="object-cover" />
             </figure>
           )}
           <h3 className="font-bold text-lg">{event.title}</h3>

@@ -3,9 +3,11 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import maplibregl, { type Map } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useSearchParams, useRouter } from "next/navigation";
 
 import type { EventPin } from "@/lib/types";
 import MapFilters, { type TimeFilter, type DistanceFilter } from "./MapFilters";
+import AreaFilters, { type Area } from "../filters/AreaFilters";
 import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
@@ -36,137 +38,162 @@ export default function MapCanvas({ onPinClick }: Props) {
   const [distance, setDistance] = useState<DistanceFilter>("5");
   const abortRef = useRef<AbortController | null>(null);
   const reqIdRef = useRef(0);
-  const debounceRef = useRef<number | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // State for the new area filter
+  const [availableAreas, setAvailableAreas] = useState<Area[]>([]);
+  const selectedAreas = new Set(searchParams.get("areas")?.split(",") ?? []);
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
   };
 
-  const fetchAndPlacePins = useCallback(async () => {
-    if (!mapRef.current) return;
+  // This function now only depends on what's needed to build the API call.
+  const fetchAndPlacePins = useCallback(
+    async (currentMap: Map) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-    // Abort previous request
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const b = mapRef.current.getBounds();
-
-    // Add a small padding to reduce edge flicker (5% of span)
-    const padLng = (b.getEast() - b.getWest()) * 0.05;
-    const padLat = (b.getNorth() - b.getSouth()) * 0.05;
-
-    const minLng = b.getWest() - padLng;
-    const minLat = b.getSouth() - padLat;
-    const maxLng = b.getEast() + padLng;
-    const maxLat = b.getNorth() + padLat;
-
-    const params = new URLSearchParams({
-      minLng: String(minLng),
-      minLat: String(minLat),
-      maxLng: String(maxLng),
-      maxLat: String(maxLat),
-      when: time, // today | week | month | weekend
-      distance,   // if you still send it
-    });
-
-    const myReqId = ++reqIdRef.current;
-
-    try {
-      const res = await fetch(`/api/map/search?${params.toString()}`, {
-        signal: controller.signal,
+      const center = currentMap.getCenter();
+      const params = new URLSearchParams({
+        lat: String(center.lat),
+        lng: String(center.lng),
+        distance: distance,
+        when: time,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Add selected areas to the API call
+      const areas = searchParams.get("areas");
+      if (areas) {
+        params.set("area_slugs", areas);
+      }
 
-      const data = (await res.json()) as EventPin[];
+      const myReqId = ++reqIdRef.current;
 
-      // Drop out-of-date responses
-      if (!mapRef.current || myReqId !== reqIdRef.current) return;
-
-      clearMarkers();
-
-      data.forEach((p) => {
-        const popupNode = createPinPopupContent({
-          vendorSlug: p.vendorSlug,
-          vendorName: p.vendorName,
-          title: p.title,
-          starts_at: p.starts_at,
-          ends_at: p.ends_at,
-          address: p.address ?? undefined,
+      try {
+        const res = await fetch(`/api/map/search?${params.toString()}`, {
+          signal: controller.signal,
         });
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(`HTTP ${res.status}: ${body}`);
+        }
 
-        popupNode.addEventListener("click", () => onPinClick(p));
+        const data = (await res.json()) as EventPin[];
+        if (myReqId !== reqIdRef.current) return;
 
-        const markerEl = createMarkerElement(p.starts_at);
-        const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
-          .setLngLat([p.lng, p.lat])
-          .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
-          .addTo(mapRef.current!);
+        clearMarkers();
 
-        markersRef.current.push(marker);
-      });
-    } catch (e: any) {
-      if (e.name === "AbortError") return; // ignore canceled
-      console.error("Failed to fetch map pins:", e);
-    }
-  }, [time, distance, onPinClick]);
+        data.forEach((p) => {
+          const popupNode = createPinPopupContent({
+            vendorSlug: p.vendorSlug,
+            vendorName: p.vendorName,
+            title: p.title,
+            starts_at: p.starts_at,
+            ends_at: p.ends_at,
+            address: p.address ?? undefined,
+          });
+          popupNode.addEventListener("click", () => onPinClick(p));
 
-  // Debounce moveend to avoid spamming the API while zooming/panning
+          const markerEl = createMarkerElement(p.starts_at);
+          const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
+            .setLngLat([p.lng, p.lat])
+            .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
+            .addTo(currentMap);
+          markersRef.current.push(marker);
+        });
+      } catch (e: any) {
+        if (e.name === "AbortError") return;
+        console.error("Failed to fetch map pins:", e);
+      }
+    },
+    [time, distance, onPinClick, searchParams] // Add searchParams to dependency array
+  );
+
+  // Effect 1: Initialize the map ONCE on component mount.
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (mapRef.current || !mapContainerRef.current) return; // Initialize only once
 
-    const handler = () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-      debounceRef.current = window.setTimeout(() => {
-        fetchAndPlacePins();
-      }, 150);
-    };
-
-    mapRef.current.on("moveend", handler);
-    return () => {
-      mapRef.current?.off("moveend", handler);
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    };
-  }, [fetchAndPlacePins]);
-
-  // Effect to initialize the map (runs only once)
-  useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current) return;
-
-    // Define the bounding box for the Charlotte area.
-    // Format: [Southwest longitude, Southwest latitude, Northeast longitude, Northeast latitude]
-    const maxBounds: [number, number, number, number] = [
-      -81.2, // West boundary
-      35.0,  // South boundary
-      -80.5, // East boundary
-      35.5   // North boundary
-    ];
-
+    const maxBounds: [number, number, number, number] = [-81.2, 35.0, -80.5, 35.5];
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-      center: [-80.8431, 35.2271], // Charlotte
-      zoom: 12,
+      center: [-80.8431, 35.2271],
+      zoom: 12, // Initial zoom, will be adjusted by the zoom effect
       minZoom: 10,
       maxBounds: maxBounds,
     });
     mapRef.current = map;
 
-    map.on("load", fetchAndPlacePins);
-
+    // Cleanup function to run when the component unmounts
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, [fetchAndPlacePins]);
+  }, []); // Empty dependency array ensures this runs only once.
 
-  // Effect to re-fetch pins when filters change
+  // Effect 2: Manage map event listeners.
   useEffect(() => {
-    if (mapRef.current?.isStyleLoaded()) {
-      fetchAndPlacePins();
+    const map = mapRef.current;
+    if (!map) return; // Don't do anything if the map isn't ready
+
+    // This is the single source of truth for fetching data.
+    const handleMoveEnd = () => fetchAndPlacePins(map);
+
+    // Attach listeners
+    map.on("load", handleMoveEnd);
+    map.on("moveend", handleMoveEnd);
+
+    // Cleanup function to remove listeners when the handler changes or component unmounts
+    return () => {
+      map.off("load", handleMoveEnd);
+      map.off("moveend", handleMoveEnd);
+    };
+  }, [fetchAndPlacePins]); // This re-attaches the listener when the fetch logic changes.
+
+  // Effect 3: This effect is ONLY for zooming. It remains the same.
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const zoomLevels: Record<DistanceFilter, number> = {
+      "5": 12, // Corrected zoom levels
+      "10": 11,
+      "20": 10,
+    };
+
+    mapRef.current.flyTo({
+      zoom: zoomLevels[distance],
+      duration: 1200,
+    });
+  }, [distance]);
+
+  // Fetch available areas once
+  useEffect(() => {
+    const fetchAreas = async () => {
+      // In a real app, you'd fetch this from your DB
+      const areas: Area[] = [
+        { name: "Uptown", slug: "uptown" },
+        { name: "South End", slug: "south-end" },
+        { name: "NoDa", slug: "noda" },
+        { name: "Plaza Midwood", slug: "plaza-midwood" },
+      ];
+      setAvailableAreas(areas);
+    };
+    fetchAreas();
+  }, []);
+
+  const handleAreaChange = (newSelected: Set<string>) => {
+    const params = new URLSearchParams(searchParams);
+    if (newSelected.size > 0) {
+      params.set("areas", Array.from(newSelected).join(","));
+    } else {
+      params.delete("areas");
     }
-  }, [fetchAndPlacePins]);
+    // Use router.push to update URL without reloading page
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
 
   return (
     <div className="w-full h-full relative">
@@ -176,6 +203,11 @@ export default function MapCanvas({ onPinClick }: Props) {
           onTimeChange={setTime}
           distance={distance}
           onDistanceChange={setDistance}
+        />
+        <AreaFilters
+          areas={availableAreas}
+          selected={selectedAreas}
+          onChange={handleAreaChange}
         />
       </div>
       <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
