@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { createSupabaseServer } from "@/lib/supabase/server";
 import ExploreView from "@/components/explore/ExploreView";
 import { ExploreCardData } from "@/components/explore/EventCard";
+import { FeaturedCardData } from "@/components/explore/FeaturedEventCard";
 
 // Define the search params type for clarity
 type ExplorePageSearchParams = {
@@ -15,11 +16,17 @@ type ExplorePageSearchParams = {
 
 export default async function ExplorePage({ searchParams }: { searchParams: Promise<ExplorePageSearchParams>; }) {
   const supabase = createSupabaseServer();
+
   const sp = await searchParams;
+
+  const { data: featuredEvents } = await supabase.rpc("get_featured_events", {
+    p_when: sp.when ?? 'anytime',
+  });
+
   // Call the new RPC with filters from the URL
   const { data: events, error } = await supabase.rpc("explore_events", {
     p_search_text: sp.search,
-    p_when: sp.when ?? 'this-week',
+    p_when: sp.when ?? 'anytime',
     p_area_slugs: sp.areas?.split(','),
     p_category_slugs: sp.categories?.split(','),
   });
@@ -35,6 +42,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
   });
   const favoriteVendorIds = new Set(favoritesData?.map(f => f.vendor_id));
 
+  const featuredCards: FeaturedCardData[] = featuredEvents ?? [];
   const cards: ExploreCardData[] = events ?? [];
 
   // Fetch all available areas and categories to pass to the filter UI
@@ -45,6 +53,7 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
 
   return (
     <ExploreView
+      featuredCards={featuredCards}
       initialCards={cards}
       availableAreas={areas ?? []}
       availableCategories={categories ?? []}
