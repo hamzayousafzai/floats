@@ -5,8 +5,15 @@ import { useState } from "react";
 import type { Database } from "@/lib/database.types";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
+type Category = { id: number; name: string; };
 
-export default function EditEventForm({ event }: { event: EventRow }) {
+type Props = {
+  event: EventRow;
+  allCategories: Category[];
+  currentCategoryIds: Set<number>;
+};
+
+export default function EditEventForm({ event, allCategories, currentCategoryIds }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -19,6 +26,8 @@ export default function EditEventForm({ event }: { event: EventRow }) {
     image_url: event.image_url || "",
     is_market: event.is_market,
     is_featured: event.is_featured,
+    // Add category_ids to the form state, initialized with the current selection
+    category_ids: currentCategoryIds,
     vendor_id: event.vendor_id || "",
     status: event.status,
     // Coords are for overriding location only, so it starts empty.
@@ -30,14 +39,28 @@ export default function EditEventForm({ event }: { event: EventRow }) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  // Specific handler for checkbox changes
+  function handleCategoryChange(categoryId: number, isChecked: boolean) {
+    const newCategoryIds = new Set(form.category_ids);
+    if (isChecked) {
+      newCategoryIds.add(categoryId);
+    } else {
+      newCategoryIds.delete(categoryId);
+    }
+    update("category_ids", newCategoryIds);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
+      // Convert the Set to an array for JSON serialization
+      const body = { ...form, category_ids: Array.from(form.category_ids) };
+
       const res = await fetch(`/admin/events/${event.id}/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to update event");
@@ -97,6 +120,25 @@ export default function EditEventForm({ event }: { event: EventRow }) {
           <input id="is_featured" type="checkbox" checked={form.is_featured} onChange={e=>update("is_featured", e.target.checked)} />
           <label htmlFor="is_featured">Feature this event on the Explore page?</label>
         </div>
+
+        {/* Add the Category Selection section */}
+        <div>
+          <label className="font-medium">Categories</label>
+          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 p-3 border rounded-lg">
+            {allCategories.map((category) => (
+              <div key={category.id} className="flex items-center gap-2">
+                <input
+                  id={`cat-${category.id}`}
+                  type="checkbox"
+                  checked={form.category_ids.has(category.id)}
+                  onChange={(e) => handleCategoryChange(category.id, e.target.checked)}
+                />
+                <label htmlFor={`cat-${category.id}`}>{category.name}</label>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="font-medium">Vendor ID (optional)</label>
           <input value={form.vendor_id} onChange={e=>update("vendor_id", e.target.value)} className="mt-1 w-full rounded border p-2" />
