@@ -18,6 +18,7 @@ export default function EditEventForm({ event }: { event: EventRow }) {
     address: event.address,
     image_url: event.image_url || "",
     is_market: event.is_market,
+    is_featured: event.is_featured,
     vendor_id: event.vendor_id || "",
     status: event.status,
     // Coords are for overriding location only, so it starts empty.
@@ -91,6 +92,10 @@ export default function EditEventForm({ event }: { event: EventRow }) {
         <div className="flex items-center gap-2">
           <input id="is_market" type="checkbox" checked={form.is_market} onChange={e=>update("is_market", e.target.checked)} />
           <label htmlFor="is_market">Is this a market-style event?</label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input id="is_featured" type="checkbox" checked={form.is_featured} onChange={e=>update("is_featured", e.target.checked)} />
+          <label htmlFor="is_featured">Feature this event on the Explore page?</label>
         </div>
         <div>
           <label className="font-medium">Vendor ID (optional)</label>

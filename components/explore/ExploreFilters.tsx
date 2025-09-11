@@ -47,14 +47,14 @@ export default function ExploreFilters({
 
   const isFilterActive =
     currentFilters.search ||
-    currentFilters.when !== "this-month" || // Match the default
+    currentFilters.when !== "anytime" || // Match the default
     currentFilters.areas.size > 0 ||
     currentFilters.categories.size > 0;
 
   const clearFilters = () => {
     setSearchTerm("");
     onFilterChange("search", "");
-    onFilterChange("when", "this-month"); // Match the default
+    onFilterChange("when", "anytime"); // Match the default
     onFilterChange("areas", new Set());
     onFilterChange("categories", new Set());
   };
