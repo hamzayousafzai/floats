@@ -1,83 +1,99 @@
 "use client";
 
-import { useState } from "react";
-import EventCard, { type ExploreCardData } from "./EventCard";
-import MapFilters from "./MapFilters";
-import { Search } from "lucide-react";
-import EventDetailModal from "./EventDetailModal"; // Import the new component
+import { useSearchParams, useRouter } from "next/navigation";
+import { useCallback, useState } from "react"; // Import useState
+import { type ExploreCardData } from "./EventCard";
+import ExploreFilters from "./ExploreFilters";
+import EventCard from "./EventCard";
+import EventDetailModal from "./EventDetailModal"; // Import the modal
+
+type Area = { name: string; slug: string };
+type Category = { name: string; slug: string };
 
 type Props = {
-  cards: ExploreCardData[];
-  favoriteVendorIds: string[];
-  typeOptions: string[];
+  initialCards: ExploreCardData[];
+  availableAreas: Area[];
+  availableCategories: Category[];
 };
 
-export default function ExploreView({ cards, favoriteVendorIds, typeOptions }: Props) {
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
+export default function ExploreView({
+  initialCards,
+  availableAreas,
+  availableCategories,
+}: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // State to manage which event is shown in the modal
   const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
 
-  const filteredCards = cards.filter((card) => {
-    const categoryMatch =
-      categoryFilter === "All" || card.category === categoryFilter;
-    const searchMatch =
-      searchQuery === "" ||
-      card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (card.vendor &&
-        card.vendor.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    return categoryMatch && searchMatch;
-  });
-
-  const handleCardClick = (card: ExploreCardData) => {
-    setSelectedEvent(card);
+  const currentFilters = {
+    search: searchParams.get("search") || "",
+    when: searchParams.get("when") || "this-week",
+    areas: new Set(searchParams.get("areas")?.split(",").filter(Boolean) ?? []),
+    categories: new Set(searchParams.get("categories")?.split(",").filter(Boolean) ?? []),
   };
 
-  const closeModal = () => {
-    setSelectedEvent(null);
-  };
+  // Wrap the handler in useCallback to stabilize its reference
+  const handleFilterChange = useCallback(
+    (
+      filterType: "search" | "when" | "areas" | "categories",
+      value: string | Set<string>
+    ) => {
+      const params = new URLSearchParams(searchParams);
+
+      if (typeof value === "string") {
+        if (value) {
+          params.set(filterType, value);
+        } else {
+          params.delete(filterType);
+        }
+      } else {
+        if (value.size > 0) {
+          params.set(filterType, Array.from(value).join(","));
+        } else {
+          params.delete(filterType);
+        }
+      }
+
+      router.push(`/explore?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams] // Dependencies for the callback
+  );
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header: This div does not grow or shrink. It stays at the top. */}
-      <div className="shrink-0 bg-base-100 border-b p-4">
-        <div className="relative mb-3">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <Search className="h-4 w-4 text-gray-400" />
+    <div className="flex flex-col h-full">
+      <ExploreFilters
+        currentFilters={currentFilters}
+        onFilterChange={handleFilterChange}
+        availableAreas={availableAreas}
+        availableCategories={availableCategories}
+      />
+      <main className="flex-1 overflow-y-auto p-4">
+        {initialCards.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {initialCards.map((card) => (
+              // Pass an onClick handler to set the selected event
+              <EventCard
+                key={card.id}
+                card={card}
+                onClick={() => setSelectedEvent(card)}
+              />
+            ))}
           </div>
-          <input
-            type="text"
-            placeholder="Search events or vendors..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="input input-bordered w-full pl-9"
-          />
-        </div>
+        ) : (
+          <div className="text-center text-gray-500 mt-16">
+            <h3 className="text-lg font-semibold">No Events Found</h3>
+            <p>Try adjusting your filters.</p>
+          </div>
+        )}
+      </main>
 
-        <MapFilters
-          options={typeOptions}
-          active={categoryFilter}
-          onChange={setCategoryFilter}
-        />
-      </div>
-
-      {/* Card List: This div takes all remaining space and scrolls internally. */}
-      <div className="flex-1 overflow-y-auto bg-base-200 p-4 pb-28">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {filteredCards.map((card) => (
-            <EventCard
-              key={card.id}
-              card={card}
-              isFavorite={
-                !!card.vendor && favoriteVendorIds.includes(card.vendor.id)
-              }
-              onClick={handleCardClick}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Use the reusable modal component */}
-      <EventDetailModal event={selectedEvent} onClose={closeModal} />
+      {/* Render the modal and control it with state */}
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+      />
     </div>
   );
 }

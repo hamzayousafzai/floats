@@ -3,9 +3,11 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import maplibregl, { type Map } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useSearchParams, useRouter } from "next/navigation";
 
 import type { EventPin } from "@/lib/types";
 import MapFilters, { type TimeFilter, type DistanceFilter } from "./MapFilters";
+import AreaFilters, { type Area } from "../filters/AreaFilters";
 import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
@@ -36,6 +38,12 @@ export default function MapCanvas({ onPinClick }: Props) {
   const [distance, setDistance] = useState<DistanceFilter>("5");
   const abortRef = useRef<AbortController | null>(null);
   const reqIdRef = useRef(0);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // State for the new area filter
+  const [availableAreas, setAvailableAreas] = useState<Area[]>([]);
+  const selectedAreas = new Set(searchParams.get("areas")?.split(",") ?? []);
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
@@ -56,6 +64,11 @@ export default function MapCanvas({ onPinClick }: Props) {
         distance: distance,
         when: time,
       });
+      // Add selected areas to the API call
+      const areas = searchParams.get("areas");
+      if (areas) {
+        params.set("area_slugs", areas);
+      }
 
       const myReqId = ++reqIdRef.current;
 
@@ -96,7 +109,7 @@ export default function MapCanvas({ onPinClick }: Props) {
         console.error("Failed to fetch map pins:", e);
       }
     },
-    [time, distance, onPinClick]
+    [time, distance, onPinClick, searchParams] // Add searchParams to dependency array
   );
 
   // Effect 1: Initialize the map ONCE on component mount.
@@ -156,6 +169,32 @@ export default function MapCanvas({ onPinClick }: Props) {
     });
   }, [distance]);
 
+  // Fetch available areas once
+  useEffect(() => {
+    const fetchAreas = async () => {
+      // In a real app, you'd fetch this from your DB
+      const areas: Area[] = [
+        { name: "Uptown", slug: "uptown" },
+        { name: "South End", slug: "south-end" },
+        { name: "NoDa", slug: "noda" },
+        { name: "Plaza Midwood", slug: "plaza-midwood" },
+      ];
+      setAvailableAreas(areas);
+    };
+    fetchAreas();
+  }, []);
+
+  const handleAreaChange = (newSelected: Set<string>) => {
+    const params = new URLSearchParams(searchParams);
+    if (newSelected.size > 0) {
+      params.set("areas", Array.from(newSelected).join(","));
+    } else {
+      params.delete("areas");
+    }
+    // Use router.push to update URL without reloading page
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
   return (
     <div className="w-full h-full relative">
       <div className="absolute top-3 left-3 z-10 space-y-2">
@@ -164,6 +203,11 @@ export default function MapCanvas({ onPinClick }: Props) {
           onTimeChange={setTime}
           distance={distance}
           onDistanceChange={setDistance}
+        />
+        <AreaFilters
+          areas={availableAreas}
+          selected={selectedAreas}
+          onChange={handleAreaChange}
         />
       </div>
       <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />

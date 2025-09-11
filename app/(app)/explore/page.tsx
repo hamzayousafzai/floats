@@ -1,79 +1,53 @@
 export const revalidate = 0;
+export const dynamic = 'force-dynamic';
 
 import { createSupabaseServer } from "@/lib/supabase/server";
 import ExploreView from "@/components/explore/ExploreView";
-import { type ExploreCardData } from "@/components/explore/EventCard"; // We will create this next
+import { ExploreCardData } from "@/components/explore/EventCard";
 
-export default async function ExplorePage() {
-  const supabase = await createSupabaseServer();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+// Define the search params type for clarity
+type ExplorePageSearchParams = {
+  search?: string;
+  when?: string;
+  areas?: string;
+  categories?: string;
+};
 
-  // 1. Fetch all upcoming/ongoing events and join their vendor data in one query.
-  const { data: events, error } = await supabase
-    .from("events")
-    .select(`
-      id, title, starts_at, ends_at, address, latitude,
-      longitude, image_url, is_market, description,
-      vendor:vendors ( id, slug, name, photo_url, category )
-    `)
-    .eq("status", "confirmed")
-    .gte("starts_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()) // Include events that started in the last 6 hours
-    .order("starts_at", { ascending: true });
+export default async function ExplorePage({ searchParams }: { searchParams: Promise<ExplorePageSearchParams>; }) {
+  const supabase = createSupabaseServer();
+  const sp = await searchParams;
+  // Call the new RPC with filters from the URL
+  const { data: events, error } = await supabase.rpc("explore_events", {
+    p_search_text: sp.search,
+    p_when: sp.when ?? 'this-week',
+    p_area_slugs: sp.areas?.split(','),
+    p_category_slugs: sp.categories?.split(','),
+  });
 
   if (error) {
-    return <main className="p-4">Error loading events: {error.message}</main>;
+    console.error("Error fetching explore events:", error);
+    // You should handle this error gracefully in the UI
   }
 
-  // 2. Map the raw data to our new, unified card shape.
-  const cards: ExploreCardData[] = (events ?? [])
-    .filter((event) => {
-      // Ensure ongoing events without an end date don't disappear immediately
-      const start = new Date(event.starts_at).getTime();
-      const end = event.ends_at ? new Date(event.ends_at).getTime() : null;
-      if (end) return end > Date.now(); // If it has an end date, show it until it's over
-      return start > Date.now() - 2 * 60 * 60 * 1000; // If no end date, show for 2 hours past start
-    })
-    .map((e) => ({
-      id: e.id,
-      href: `/events/${e.id}`, // Future event detail page
-      imageUrl: e.image_url ?? e.vendor?.photo_url ?? null,
-      title: e.title,
-      description: e.description, // Add description to the card data
-      // Use vendor category if it exists, otherwise determine from event type
-      category: e.vendor?.category ?? (e.is_market ? "Market" : "Event"),
-      starts_at: e.starts_at,
-      address: e.address,
-      // Attach vendor info if it exists
-      vendor: e.vendor
-        ? { id: e.vendor.id, name: e.vendor.name, slug: e.vendor.slug }
-        : null,
-    }));
+  // Fetch user's favorites to pass to the cards
+  const { data: favoritesData } = await supabase.auth.getUser().then(({ data: { user } }) => {
+    return supabase.from("favorites").select('vendor_id').eq('user_id', user?.id ?? '');
+  });
+  const favoriteVendorIds = new Set(favoritesData?.map(f => f.vendor_id));
 
-  // 3. Fetch user's favorite VENDORS (event favorites can be added later)
-  let favoriteVendorIds: string[] = [];
-  if (user) {
-    const { data: favs } = await supabase
-      .from("favorites")
-      .select("vendor_id")
-      .eq("user_id", user.id);
-    favoriteVendorIds = (favs ?? []).map((f) => f.vendor_id);
-  }
+  const cards: ExploreCardData[] = events ?? [];
 
-  // 4. Get all unique category types for the filter chips
-  const typeOptions = [
-    "All",
-    ...new Set(cards.map((c) => c.category).filter(Boolean)),
-  ];
+  // Fetch all available areas and categories to pass to the filter UI
+  const { data: areas } = await supabase.from("areas").select("name, slug").order("name");
+  const { data: categories } = await supabase.from("categories").select("name, slug").order("name");
+
+  // Map the results to the card data shape
 
   return (
-    <div className="fixed inset-0">
-      <ExploreView
-        cards={cards}
-        favoriteVendorIds={favoriteVendorIds}
-        typeOptions={typeOptions}
-      />
-    </div>
+    <ExploreView
+      initialCards={cards}
+      availableAreas={areas ?? []}
+      availableCategories={categories ?? []}
+    />
   );
 }

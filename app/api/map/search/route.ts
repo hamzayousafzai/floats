@@ -10,6 +10,7 @@ export async function GET(req: Request) {
       distance: Number(url.searchParams.get("distance")), // in miles
       when: url.searchParams.get("when") ?? "today",
       tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      areaSlugs: url.searchParams.get("area_slugs"),
     };
 
     // Validate required parameters
@@ -18,6 +19,8 @@ export async function GET(req: Request) {
     }
 
     const supabase = createSupabaseServer();
+
+    const areaSlugsArray = params.areaSlugs ? params.areaSlugs.split(',') : null;
     // Call the new radius search function
     const { data, error } = await supabase.rpc("map_events_radius", {
       p_lat: params.lat,
@@ -25,6 +28,7 @@ export async function GET(req: Request) {
       p_distance_miles: params.distance,
       p_when: params.when,
       p_tz: params.tz,
+      p_area_slugs: areaSlugsArray,
     });
 
     if (error) {
