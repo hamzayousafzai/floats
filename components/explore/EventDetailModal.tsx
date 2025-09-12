@@ -3,10 +3,14 @@
 import { type ExploreCardData } from "./EventCard";
 import { Calendar, MapPin, X, Download, Navigation } from "lucide-react"; // Import Navigation icon
 import Image from "next/image";
+import FavoriteButton from "@/components/FavoriteButton";
 
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
+  eventId?: string;
+  seriesId?: string | null;
+  variant?: "default" | "compact" | string;
 };
 
 export default function EventDetailModal({ event, onClose }: Props) {
@@ -38,8 +42,24 @@ export default function EventDetailModal({ event, onClose }: Props) {
               <Image src={event.image_url} alt={event.title} fill className="object-cover" />
             </figure>
           )}
-          <h3 className="font-bold text-lg">{event.title}</h3>
-          <p className="py-4 text-sm">{event.description || "No description available."}</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-lg">{event.title}</h3>
+            </div>
+
+            {/* Large pill favorite button */}
+            <div>
+              <FavoriteButton
+                eventId={event.id}
+                seriesId={event.series_id ?? null}
+                startsAt={event.starts_at ?? null}
+                initialStarred={event.is_starred ?? undefined}
+                variant="pill"
+                size="md"
+              />
+            </div>
+          </div>
+          <p className="py-4 text-sm">{event.description }</p>
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-500" />
