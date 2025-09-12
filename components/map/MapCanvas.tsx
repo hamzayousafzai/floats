@@ -34,7 +34,7 @@ export default function MapCanvas({ onPinClick }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
-  const [time, setTime] = useState<TimeFilter>("today");
+  const [time, setTime] = useState<TimeFilter>("this-month");
   const [distance, setDistance] = useState<DistanceFilter>("5");
   const abortRef = useRef<AbortController | null>(null);
   const reqIdRef = useRef(0);
@@ -91,6 +91,7 @@ export default function MapCanvas({ onPinClick }: Props) {
             vendorSlug: p.vendorSlug,
             vendorName: p.vendorName,
             title: p.title,
+            description: p.description,
             starts_at: p.starts_at,
             ends_at: p.ends_at,
             address: p.address ?? undefined,

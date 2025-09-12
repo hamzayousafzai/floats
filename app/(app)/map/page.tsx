@@ -17,20 +17,14 @@ export default function MapPage() {
   const handlePinClick = (pin: EventPin) => {
     const cardData: ExploreCardData = {
       id: pin.id,
-      href: `/events/${pin.id}`,
-      imageUrl: pin.imageUrl ?? pin.vendorPhotoUrl ?? null,
+      image_url: pin.image_url ?? null,     
       title: pin.title,
-      description: pin.description,
-      category: pin.vendorCategory ?? (pin.isMarket ? "Market" : "Event"),
       starts_at: pin.starts_at,
-      address: pin.address,
-      vendor: pin.vendorId
-        ? {
-            id: pin.vendorId,
-            name: pin.vendorName!,
-            slug: pin.vendorSlug!,
-          }
-        : null,
+      address: pin.address ?? "",
+      latitude: pin.lat ?? null,     
+      longitude: pin.lng ?? null,
+      description: pin.description ?? null,
+      categories: pin.categories ?? [],
     };
     setSelectedEvent(cardData);
   };

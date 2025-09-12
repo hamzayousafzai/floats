@@ -1,48 +1,144 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type Props = {
-  vendorId: string;
-  initial: boolean;
-  action: (vendorId: string, revalidate?: string | string[]) => Promise<{ ok: boolean; favorited: boolean }>;
-  revalidatePaths?: string | string[];
-  size?: "sm" | "md";
+export type FavoriteButtonProps = {
+  eventId: string;
+  seriesId?: string | null;
+  /** ISO string with offset; used to decide auto-follow eligibility */
+  startsAt?: string | null;
+  /** if you already know starred state, pass it to skip the initial fetch */
+  initialStarred?: boolean;
+  /** display variant: icon (compact) or pill (star + label) */
+  variant?: "icon" | "pill";
+  /** visual size for pill/icon */
+  size?: "sm" | "md" | "lg";
+  className?: string;
+  onChange?: (starred: boolean) => void;
 };
 
-export default function FavoriteButton({ vendorId, initial, action, revalidatePaths, size = "md" }: Props) {
-  const [isPending, startTransition] = useTransition();
-  const [optimistic, setOptimistic] = useOptimistic(initial, (_state, next: boolean) => next);
+export default function FavoriteButton({
+  eventId,
+  seriesId = null,
+  startsAt = null,
+  initialStarred,
+  variant = "icon",
+  size = "md",
+  className = "",
+  onChange,
+}: FavoriteButtonProps) {
+  const supabase = createSupabaseBrowserClient();
+  const [loading, setLoading] = useState<boolean>(false);
+  const [starred, setStarred] = useState<boolean>(!!initialStarred);
 
-  const label = optimistic ? "Unfavorite" : "Favorite";
+  // load star state when initialStarred not provided
+  useEffect(() => {
+    let active = true;
+    if (initialStarred !== undefined) return;
+    (async () => {
+      try {
+        setLoading(true);
+        const { data: auth } = await supabase.auth.getUser();
+        if (!auth?.user) { if (active) setStarred(false); return; }
+        const uid = auth.user.id;
+        const { data, error } = await supabase
+          .from("event_stars")
+          .select("event_id")
+          .eq("user_id", uid)
+          .eq("event_id", eventId)
+          .maybeSingle();
+        if (active) {
+          if (error) {
+            console.error("FavoriteButton load error:", error);
+            setStarred(false);
+          } else {
+            setStarred(!!data);
+          }
+        }
+      } catch (err) {
+        console.error("FavoriteButton load exception:", err);
+        if (active) setStarred(false);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [eventId, initialStarred, supabase]);
 
-  function onClick() {
-    startTransition(() => {
-      // optimistic flip immediately (INSIDE the transition)
-      setOptimistic(!optimistic);
+  const toggle = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    const next = !starred;
+    setStarred(next);
+    onChange?.(next);
 
-      // run the server action, then settle the optimistic state
-      action(vendorId, revalidatePaths)
-        .then((res) => {
-          setOptimistic(res.favorited);
-        })
-        .catch(() => {
-          // rollback on error
-          setOptimistic(initial);
-        });
-    });
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) throw new Error("Please sign in to save favorites.");
+      const uid = auth.user.id;
+
+      if (next) {
+        const { error: upsertErr } = await supabase
+          .from("event_stars")
+          .upsert([{ user_id: uid, event_id: eventId }], { onConflict: ["user_id", "event_id"] });
+        if (upsertErr) throw upsertErr;
+
+        const parsed = startsAt ? Date.parse(startsAt) : NaN;
+        const isFuture = isNaN(parsed) ? true : parsed > Date.now();
+        if (seriesId && isFuture) {
+          const { error: followErr } = await supabase
+            .from("series_follows")
+            .upsert([{ user_id: uid, seriesId }], { onConflict: ["user_id", "series_id"] });
+          if (followErr) console.warn("series follow upsert failed:", followErr);
+        }
+      } else {
+        const { error: delErr } = await supabase
+          .from("event_stars")
+          .delete()
+          .eq("user_id", uid)
+          .eq("event_id", eventId);
+        if (delErr) throw delErr;
+      }
+    } catch (e) {
+      setStarred(!next);
+      onChange?.(!next);
+      console.error("Favorite toggle error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange]);
+
+  const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "btn-md";
+
+  if (variant === "icon") {
+    // DaisyUI ghost icon button
+    return (
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={loading}
+        aria-label={starred ? "Unfavorite" : "Favorite"}
+        className={`btn btn-ghost ${sizeClass} ${className}`}
+        title={starred ? "Unfavorite" : "Favorite"}
+      >
+        <span className="text-lg">{starred ? "★" : "☆"}</span>
+      </button>
+    );
   }
 
+  // pill / labeled variant using DaisyUI "btn" with icon + text
   return (
     <button
-      disabled={isPending}
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-sm ${optimistic ? "bg-black text-white" : "bg-white"}`}
-      aria-pressed={optimistic}
-      aria-label={label}
-      title={label}
+      type="button"
+      onClick={toggle}
+      disabled={loading}
+      aria-pressed={starred}
+      className={`btn ${starred ? "btn-primary" : "btn-outline"} ${sizeClass} ${className}`}
+      title={starred ? "Favorited" : "Favorite"}
     >
-      {isPending ? "…" : optimistic ? "★ Favorited" : "☆ Favorite"}
+      <span className="mr-2 text-lg leading-none">{starred ? "★" : "☆"}</span>
+      <span className="whitespace-nowrap">{starred ? "Favorited" : "Favorite"}</span>
     </button>
   );
 }

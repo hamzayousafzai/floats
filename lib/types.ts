@@ -8,6 +8,8 @@ export type EventPin = {
   starts_at: string;
   ends_at: string;
   address: string | null;
+  imageUrl?: string | null;
+  description: string | null;
 };
 
 export type WhenFilter = "now" | "today" | "weekend";

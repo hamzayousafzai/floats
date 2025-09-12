@@ -1,92 +1,81 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-// Helper function to generate a URL-friendly slug from a name
-function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-") // Replace spaces with -
-    .replace(/[^\w-]+/g, "") // Remove all non-word chars
-    .replace(/--+/g, "-"); // Replace multiple - with single -
-}
+import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
-  const supabase = await createSupabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const srv = await createSupabaseServer();
+  const { data: { user } } = await srv.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Admin check
+  const { data: admin } = await srv.from("app_admins").select("user_id").eq("user_id", user.id).maybeSingle();
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // parse + normalize payload
+  const raw = await req.json().catch(() => null);
+  console.log("admin create payload:", raw);
+
+  let vendorName: string | undefined;
+  let events: any[] | undefined;
+
+  if (Array.isArray(raw)) {
+    events = raw;
+    vendorName = raw[0]?.vendor_name;
+  } else if (raw && Array.isArray(raw.events)) {
+    events = raw.events;
+    vendorName = raw.vendor_name ?? raw.events[0]?.vendor_name;
+  } else if (raw && Array.isArray(raw.items)) {
+    events = raw.items;
+    vendorName = raw.vendor_name ?? raw.items[0]?.vendor_name;
+  } else {
+    return NextResponse.json({
+      error: "Invalid payload: vendor_name and events[] required",
+      received: Array.isArray(raw) ? "<array>" : Object.keys(raw ?? {}),
+    }, { status: 400 });
   }
 
-  const { data: admin } = await supabase.from("app_admins").select("user_id").eq("user_id", user.id).single();
-  if (!admin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!vendorName || !events || events.length === 0) {
+    return NextResponse.json({
+      error: "Invalid payload: vendor_name and events[] required",
+      vendor_name_present: Boolean(vendorName),
+      events_count: events?.length ?? 0
+    }, { status: 400 });
   }
 
   try {
-    const eventsPayload = await req.json();
-    const eventsToProcess = Array.isArray(eventsPayload) ? eventsPayload : [eventsPayload];
+    const adminClient = createSupabaseAdmin();
 
-    if (eventsToProcess.length === 0 || !eventsToProcess[0].vendor_name) {
-      return NextResponse.json({ error: "No event data or vendor name provided" }, { status: 400 });
-    }
+    // Build RPC payload and ensure the function sees recurring intent:
+    const rpcPayload: any = { vendor_name: vendorName, events };
 
-    const vendorName = eventsToProcess[0].vendor_name;
-    let vendorId: string;
-
-    // Step 1: Find or Create the Vendor
-    const { data: existingVendor, error: findError } = await supabase
-      .from("vendors")
-      .select("id")
-      .eq("name", vendorName)
-      .single();
-
-    if (existingVendor) {
-      vendorId = existingVendor.id;
-    } else if (findError && findError.code === 'PGRST116') { // PGRST116 means no rows found
-      // Vendor not found, so we create it
-      const { data: newVendor, error: createError } = await supabase
-        .from("vendors")
-        .insert({
-          name: vendorName,
-          slug: slugify(vendorName),
-          created_by: user.id,
-        })
-        .select("id")
-        .single();
-
-      if (createError) {
-        // This could happen if the generated slug already exists, or another issue.
-        throw new Error(`Could not create new vendor: ${createError.message}`);
+    // If multiple dates provided, mark recurring so the function will create/upsert a series
+    if (events.length > 1) {
+      rpcPayload.is_recurring = true;
+      // optionally set a default series_title from the first event title
+      if (!rpcPayload.series_title && events[0]?.title) {
+        rpcPayload.series_title = events[0].title;
       }
-      vendorId = newVendor!.id;
-    } else if (findError) {
-      // A different database error occurred during the find query
-      throw new Error(`Error finding vendor: ${findError.message}`);
     }
 
-    // Step 2: Prepare events with the correct vendor_id
-    const eventsToInsert = eventsToProcess.map(event => {
-      const { vendor_name, ...rest } = event; // Remove vendor_name
-      return {
-        ...rest,
-        vendor_id: vendorId!, // Add the resolved vendor_id
-      };
-    });
+    // If the first event carries explicit series fields, pass them through
+    const first = events[0] ?? {};
+    if (first.series_title) rpcPayload.series_title = first.series_title;
+    if (first.series_notes) rpcPayload.series_notes = first.series_notes;
+    if (first.series_id) rpcPayload.series_id = first.series_id;
 
-    // Step 3: Insert the events
-    const { error: insertError } = await supabase.from("events").insert(eventsToInsert);
+    // Call RPC: function expects single jsonb param named "p"
+    const { data, error } = await adminClient.rpc("admin_create_events_with_series", { p: rpcPayload });
 
-    if (insertError) {
-      console.error("Supabase insert error:", insertError);
-      return NextResponse.json({ error: `Database error: ${insertError.message}` }, { status: 500 });
+    if (error) {
+      console.error("RPC error:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    const series_id = data?.[0]?.series_id ?? null;
+    const event_ids = (data ?? []).map((r: any) => r.event_id);
+    return NextResponse.json({ ok: true, series_id, event_ids, count: event_ids.length });
   } catch (e: any) {
-    console.error("API route error:", e);
-    return NextResponse.json({ error: e.message || "An internal server error occurred." }, { status: 500 });
+    console.error("admin create route error:", e);
+    return NextResponse.json({ error: e?.message ?? "Internal error" }, { status: 500 });
   }
 }

@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { ImageIcon } from "lucide-react";
 import { KeyboardEvent } from "react";
+import FavoriteButton from "@/components/FavoriteButton";
+import SeriesFollowButton from "@/components/SeriesFollowButton";
 
 export type FeaturedCardData = {
   id: string;
@@ -15,6 +17,8 @@ export type FeaturedCardData = {
   latitude: number | null;
   longitude: number | null;
   categories: string[];
+  is_starred?: boolean;
+  series_id?: string | null;
 };
 
 type Props = {
@@ -62,6 +66,7 @@ export default function FeaturedEventCard({ card, onClick }: Props) {
         <p className="text-xs font-semibold text-gray-500">{formattedDate}</p>
         <h3 className="text-sm font-bold truncate">{card.title}</h3>
       </div>
+
     </div>
   );
 }

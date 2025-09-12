@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Calendar, MapPin, ImageIcon } from "lucide-react";
+import SeriesFollowButton from "@/components/SeriesFollowButton";
 
 export type ExploreCardData = {
   id: string;
@@ -75,6 +76,7 @@ export default function EventCard({ card, onClick }: Props) {
           </div>
         </div>
       </div>
-    </div>
+        {/* existing action buttons like Directions, Share, etc. */}
+      </div>
   );
 }

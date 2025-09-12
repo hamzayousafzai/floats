@@ -125,10 +125,10 @@ export function createPinPopupContent(pin: PinData): HTMLElement {
   }
 
   // Add the description element
-  const descriptionEl = document.createElement("p");
-  descriptionEl.className = "text-xs text-gray-600 mt-1";
-  descriptionEl.textContent = pin.description || "No description available";
-  content.appendChild(descriptionEl);
+  // const descriptionEl = document.createElement("p");
+  // descriptionEl.className = "text-xs text-gray-600 mt-1";
+  // descriptionEl.textContent = pin.description || "";
+  // content.appendChild(descriptionEl);
 
   const timeEl = document.createElement("p");
   timeEl.className = "text-xs text-gray-500";
