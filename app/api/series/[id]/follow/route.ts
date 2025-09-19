@@ -1,28 +1,57 @@
+import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const seriesId = params.id;
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const seriesId = (await params).id;
+  const srv = await createSupabaseServer();
+  const { data: { user } } = await srv.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const following = Boolean(body.following);
+
   try {
-    const supabase = await createSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const supabaseAdmin = createSupabaseAdmin();
-
-    // Check existing follow
-    const { data: existing } = await supabase.from("series_follows").select("*").eq("series_id", seriesId).eq("user_id", user.id).maybeSingle();
-    if (existing) {
-      const { error: delError } = await supabaseAdmin.from("series_follows").delete().match({ series_id: seriesId, user_id: user.id });
-      if (delError) throw new Error(delError.message);
-      return NextResponse.json({ following: false });
+    if (following) {
+      // only upsert the existing columns (user_id, series_id)
+      const { error } = await srv
+        .from("series_follows")
+        .upsert([{ user_id: user.id, series_id: seriesId }], { onConflict: ["user_id", "series_id"] });
+      if (error) throw error;
     } else {
-      const { error: insertError } = await supabaseAdmin.from("series_follows").insert([{ series_id: seriesId, user_id: user.id }]);
-      if (insertError) throw new Error(insertError.message);
-      return NextResponse.json({ following: true });
+      const { error } = await srv
+        .from("series_follows")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("series_id", seriesId);
+      if (error) throw error;
     }
+
+    return NextResponse.json({ ok: true, following });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
+    console.error("series follow error:", err);
+    return NextResponse.json({ error: err?.message ?? "Internal error" }, { status: 500 });
+  }
+}
+
+// GET returns whether the requesting user follows this series
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const srv = await createSupabaseServer();
+  const { data: { user } } = await srv.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const seriesId = (await params).id;
+  try {
+    const { data, error } = await srv
+      .from("series_follows")
+      .select("series_id")
+      .eq("user_id", user.id)
+      .eq("series_id", seriesId)
+      .maybeSingle();
+    if (error) throw error;
+    const following = Boolean(data);
+    return NextResponse.json({ following });
+  } catch (err: any) {
+    console.error("series follow GET error:", err);
+    return NextResponse.json({ error: err?.message ?? "Internal error" }, { status: 500 });
   }
 }

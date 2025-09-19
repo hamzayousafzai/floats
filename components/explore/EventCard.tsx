@@ -14,6 +14,11 @@ export type ExploreCardData = {
   longitude?: number | null; // Ensure these are in the type
   description?: string | null;
   categories: string[];
+
+  is_starred?: boolean;
+  is_notified?: boolean;
+  is_series_followed?: boolean;
+  series_id?: string | null;
 };
 
 type Props = {
