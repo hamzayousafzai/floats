@@ -15,13 +15,13 @@ function toDateArray(date: Date): ics.DateArray {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // This line forces the route to be dynamic and ensures `params` is populated.
   const { searchParams } = new URL(req.url);
 
   const supabase = await createSupabaseServer();
-  const eventId = params.id; // This will now work correctly.
+  const eventId = (await params).id; // This will now work correctly.
   const reminderDays = parseInt(searchParams.get("reminderDays") || "1", 10);
 
   // 1. Fetch the specific event from Supabase
