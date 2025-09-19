@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { type ExploreCardData } from "./EventCard";
-import { Calendar, MapPin, X, Download, Navigation } from "lucide-react";
+import { Calendar, MapPin, X, Download, Navigation, Share2 } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
 import NotificationBell from "@/components/NotificationBell";
@@ -104,6 +104,46 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     [event?.address, event?.latitude, event?.longitude]
   );
 
+  const shareEvent = useCallback(async () => {
+    if (!event?.id) return;
+    const url = `${window.location.origin}/events/${event.id}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: event.title ?? "Event",
+          text: event.description ?? undefined,
+          url,
+        });
+        return;
+      }
+
+      // clipboard API (correct spelling: writeText)
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(url);
+        alert("Event link copied");
+        return;
+      }
+
+      // fallback: programmatic copy via textarea + execCommand
+      const textarea = document.createElement("textarea");
+      textarea.value = url;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand("copy");
+        alert("Event link copied");
+      } catch (copyErr) {
+        console.error("Clipboard fallback failed:", copyErr);
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    } catch (err) {
+      console.error("Share failed:", err);
+    }
+  }, [event?.id, event?.title, event?.description]);
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
@@ -158,15 +198,20 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
             </div>
           </div>
 
-          <div className="modal-action">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
             {canGetDirections && (
               <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
                 <Navigation className="h-4 w-4" /> Get Directions
               </a>
             )}
+
             <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
               <Download className="h-4 w-4" /> Add to Calendar
             </a>
+
+            <button type="button" onClick={shareEvent} className="btn btn-outline">
+              <Share2 className="h-4 w-4" /> Share
+            </button>
           </div>
         </div>
       )}
