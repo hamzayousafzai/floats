@@ -1,54 +1,138 @@
 "use client";
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { type ExploreCardData } from "./EventCard";
-import { Calendar, MapPin, X, Download, Navigation } from "lucide-react"; // Import Navigation icon
+import { Calendar, MapPin, X, Download, Navigation } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
+import NotificationBell from "@/components/NotificationBell";
 
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
-  eventId?: string;
-  seriesId?: string | null;
-  variant?: "default" | "compact" | string;
+  onCardChange?: (id: string, patch: Partial<ExploreCardData> | Partial<any>) => void;
 };
 
-export default function EventDetailModal({ event, onClose }: Props) {
-  // Function to generate the correct maps URL
-  const getDirectionsUrl = () => {
-    if (!event) return "#";
+export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
+  const [starred, setStarred] = useState<boolean>(event?.is_starred ?? false);
+  const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
+  const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
 
-    // Prefer using lat/lng for accuracy
+  useEffect(() => {
+    setStarred(event?.is_starred ?? false);
+    let mounted = true;
+    (async () => {
+      if (!event?.id) return;
+
+      // load persisted notify state (set local state only; DO NOT call onCardChange here)
+      try {
+        const notifyRes = await fetch(`/api/events/${event.id}/notify`);
+        const notifyJson = notifyRes.ok ? await notifyRes.json() : { notified: false };
+        if (mounted) {
+          setNotified(Boolean(notifyJson.notified));
+          // removed: onCardChange?.(event.id, { is_notified: Boolean(notifyJson.notified) });
+        }
+      } catch {
+        if (mounted) setNotified(false);
+      }
+
+      // load series follow state (set local state only)
+      if (event?.series_id) {
+        try {
+          const followRes = await fetch(`/api/series/${event.series_id}/follow`);
+          const followJson = followRes.ok ? await followRes.json() : { following: false };
+          if (mounted) {
+            setFollowing(Boolean(followJson.following));
+            // removed: onCardChange?.(event.id, { is_series_followed: Boolean(followJson.following) });
+          }
+        } catch {
+          if (mounted) setFollowing(false);
+        }
+      } else {
+        if (mounted) setFollowing(false);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [event?.id, event?.series_id]); // keep deps minimal
+
+  const handleFavoriteChange = async (next: boolean) => {
+    setStarred(next);
+    onCardChange?.(event!.id, { is_starred: next });
+
+    if (!next && event?.id) {
+      setNotified(false);
+      setFollowing(false);
+      onCardChange?.(event.id, { is_notified: false, is_series_followed: false });
+
+      try {
+        await fetch(`/api/events/${event.id}/notify`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        });
+      } catch (err) {
+        console.error("Failed to disable event notification on unfavorite:", err);
+      }
+    }
+  };
+
+  // callbacks from NotificationBell
+  const handleNotifyChange = useCallback((val: boolean) => {
+    setNotified(val);
+    if (event?.id) onCardChange?.(event.id, { is_notified: val });
+  }, [event?.id, onCardChange]);
+
+  const handleFollowChange = useCallback((val: boolean) => {
+    setFollowing(val);
+    if (event?.id) onCardChange?.(event.id, { is_series_followed: val });
+  }, [event?.id, onCardChange]);
+
+  const getDirectionsUrl = useCallback(() => {
+    if (!event) return "#";
     if (event.latitude && event.longitude) {
       return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
     }
-    // Fallback to address if coordinates are not available
     if (event.address) {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`;
     }
-    
     return "#";
-  };
+  }, [event?.latitude, event?.longitude, event?.address]);
 
-  const canGetDirections = !!(event?.address || (event?.latitude && event?.longitude));
+  const canGetDirections = useMemo(
+    () => !!(event?.address || (event?.latitude && event?.longitude)),
+    [event?.address, event?.latitude, event?.longitude]
+  );
 
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
         <div className="modal-box">
           <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"><X /></button>
+
           {event.image_url && (
             <figure className="relative h-48 -mx-6 -mt-6 mb-4 bg-gray-200 rounded-t-lg overflow-hidden">
               <Image src={event.image_url} alt={event.title} fill className="object-cover" />
             </figure>
           )}
+
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="font-bold text-lg">{event.title}</h3>
             </div>
 
-            {/* Large pill favorite button */}
-            <div>
+            <div className="flex items-center gap-3 ml-auto">
+              <NotificationBell
+                eventId={event.id}
+                seriesId={event.series_id ?? null}
+                visible={Boolean(starred)}
+                initialNotified={notified}
+                initialFollowing={following}
+                className="mr-1"
+                onNotifyChange={handleNotifyChange}
+                onFollowChange={handleFollowChange}
+              />
+
               <FavoriteButton
                 eventId={event.id}
                 seriesId={event.series_id ?? null}
@@ -56,10 +140,13 @@ export default function EventDetailModal({ event, onClose }: Props) {
                 initialStarred={event.is_starred ?? undefined}
                 variant="pill"
                 size="md"
+                onChange={handleFavoriteChange}
               />
             </div>
           </div>
-          <p className="py-4 text-sm">{event.description }</p>
+
+          {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
+
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-500" />
@@ -70,33 +157,20 @@ export default function EventDetailModal({ event, onClose }: Props) {
               <span>{event.address}</span>
             </div>
           </div>
+
           <div className="modal-action">
-            {/* Get Directions Button */}
             {canGetDirections && (
-              <a
-                href={getDirectionsUrl()}
-                target="_blank" // Open in a new tab/native app
-                rel="noopener noreferrer"
-                className="btn btn-outline"
-              >
-                <Navigation className="h-4 w-4" />
-                Get Directions
+              <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                <Navigation className="h-4 w-4" /> Get Directions
               </a>
             )}
-            <a
-              href={`/api/events/${event.id}/ics?reminderDays=2`}
-              className="btn btn-outline"
-              download
-            >
-              <Download className="h-4 w-4" />
-              Add to Calendar
+            <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
+              <Download className="h-4 w-4" /> Add to Calendar
             </a>
           </div>
         </div>
       )}
-      <form method="dialog" className="modal-backdrop">
-        <button onClick={onClose}>close</button>
-      </form>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
     </dialog>
   );
 }

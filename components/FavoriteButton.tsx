@@ -42,23 +42,31 @@ export default function FavoriteButton({
         const { data: auth } = await supabase.auth.getUser();
         if (!auth?.user) { if (active) setStarred(false); return; }
         const uid = auth.user.id;
+
         const { data, error } = await supabase
           .from("event_stars")
           .select("event_id")
           .eq("user_id", uid)
           .eq("event_id", eventId)
           .maybeSingle();
+
         if (active) {
           if (error) {
             console.error("FavoriteButton load error:", error);
             setStarred(false);
+            onChange?.(false);            // notify parent on error -> not starred
           } else {
-            setStarred(!!data);
+            const resolved = !!data;
+            setStarred(resolved);
+            onChange?.(resolved);         // IMPORTANT: sync parent with initial value
           }
         }
       } catch (err) {
         console.error("FavoriteButton load exception:", err);
-        if (active) setStarred(false);
+        if (active) {
+          setStarred(false);
+          onChange?.(false);
+        }
       } finally {
         if (active) setLoading(false);
       }

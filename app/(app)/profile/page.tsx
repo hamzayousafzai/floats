@@ -30,6 +30,23 @@ export default async function ProfilePage() {
     .limit(200);
 
   const eventIds = (starRows ?? []).map(r => r.event_id);
+
+  // move/define normalize here so we use it when mapping rows -> favoriteEvents
+  const normalize = (ev: any) => ({
+    id: ev.id,
+    title: ev.title,
+    starts_at: ev.starts_at,
+    ends_at: ev.ends_at,
+    description: ev.description ?? null,
+    image_url: ev.image_url ?? null,
+    address: ev.address ?? "",
+    latitude: ev.latitude ?? null,
+    longitude: ev.longitude ?? null,
+    series_id: ev.series_id ?? null,
+    categories: ev.categories ?? [],
+    is_starred: true,
+  });
+
   let favoriteEvents: Array<{
     id: string;
     title: string;
@@ -54,35 +71,15 @@ export default async function ProfilePage() {
       `)
       .in("id", eventIds);
 
-    favoriteEvents = (rows ?? []).map((e: any) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description,
-      starts_at: e.starts_at,
-      ends_at: e.ends_at,
-      address: e.address,
-      image_url: e.image_url,
-      latitude: e.latitude,
-      longitude: e.longitude,
-      series_id: e.series_id,
-      vendor: e.vendors ? { id: e.vendors.id, name: e.vendors.name, slug: e.vendors.slug } : null,
-    }));
+    // use normalize so is_starred and other normalized fields are present
+    favoriteEvents = (rows ?? []).map((e: any) => {
+      const base = normalize(e);
+      return {
+        ...base,
+        vendor: e.vendors ? { id: e.vendors.id, name: e.vendors.name, slug: e.vendors.slug } : null,
+      };
+    });
   }
-
-  const normalize = (ev: any) => ({
-    id: ev.id,
-    title: ev.title,
-    starts_at: ev.starts_at,
-    ends_at: ev.ends_at,
-    description: ev.description ?? null,
-    image_url: ev.image_url ?? null,
-    address: ev.address ?? "",
-    latitude: ev.latitude ?? null,
-    longitude: ev.longitude ?? null,
-    series_id: ev.series_id ?? null,
-    categories: ev.categories ?? [],
-    is_starred: true,
-  });
 
   const now = Date.now();
   const upcoming = favoriteEvents.filter(e => Date.parse(String(e.starts_at)) > now)

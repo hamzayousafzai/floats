@@ -1,72 +1,92 @@
 "use client";
 
 import Image from "next/image";
-import { ImageIcon } from "lucide-react";
-import { KeyboardEvent } from "react";
+import { Calendar } from "lucide-react";
 import FavoriteButton from "@/components/FavoriteButton";
-import SeriesFollowButton from "@/components/SeriesFollowButton";
+// use the shared ExploreCardData shape
+import type { ExploreCardData } from "./EventCard";
 
-export type FeaturedCardData = {
-  id: string;
-  title: string;
-  starts_at: string;
-  image_url: string | null;
-  // Add other fields needed by the modal
-  description: string | null;
-  address: string;
-  latitude: number | null;
-  longitude: number | null;
-  categories: string[];
-  is_starred?: boolean;
-  series_id?: string | null;
-};
+export type FeaturedCardData = ExploreCardData;
 
-type Props = {
+export default function FeaturedEventCard({
+  card,
+  onClick,
+  onStarChange,
+  className = "",
+}: {
   card: FeaturedCardData;
-  onClick: () => void;
-};
-
-export default function FeaturedEventCard({ card, onClick }: Props) {
-  const eventDate = new Date(card.starts_at);
-  const formattedDate = eventDate.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onClick();
-    }
-  };
+  onClick?: (c: FeaturedCardData) => void;
+  // updated: accept (id, next) so parent can update by id
+  onStarChange?: (id: string, next: boolean) => void;
+  className?: string;
+}) {
+  const dateText = card.starts_at
+    ? new Date(card.starts_at).toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
 
   return (
-    <div
-      onClick={onClick}
-      onKeyDown={handleKeyDown}
+    <article
+      onClick={() => onClick?.(card)}
+      className={`w-64 min-w-[16rem] cursor-pointer rounded-lg overflow-hidden border shadow-sm ${className}`}
       role="button"
-      tabIndex={0}
-      className="carousel-item flex flex-col w-44 text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg"
+      aria-label={card.title ?? "event"}
     >
-      <figure className="relative aspect-square w-full rounded-lg overflow-hidden bg-base-200">
+      <div className="relative h-40 bg-base-200">
         {card.image_url ? (
           <Image
             src={card.image_url}
-            alt={card.title}
-            fill
-            style={{ objectFit: "cover" }}
+            alt={card.title ?? "event image"}
+            fill className="object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center h-full w-full">
-            <ImageIcon className="h-12 w-12 text-base-300" />
+          <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+            No image
           </div>
         )}
-      </figure>
-      <div className="mt-2 px-1">
-        <p className="text-xs font-semibold text-gray-500">{formattedDate}</p>
-        <h3 className="text-sm font-bold truncate">{card.title}</h3>
       </div>
 
-    </div>
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-sm font-semibold line-clamp-2">{card.title}</h3>
+
+          <div onClick={(e) => e.stopPropagation()}>
+            <FavoriteButton
+              eventId={card.id}
+              initialStarred={card.is_starred ?? undefined}
+              variant="icon"
+              // pass card id along with next state
+              onChange={(next) => onStarChange?.(card.id, next)}
+            />
+          </div>
+        </div>
+
+        {dateText && (
+          <p className="text-xs text-gray-500 mt-1">{dateText}</p>
+        )}
+
+        {card.address && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-base-content/70">
+            <Calendar className="h-3.5 w-3.5" />
+            <span className="truncate">{card.address}</span>
+          </div>
+        )}
+
+        {card.categories && card.categories.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {card.categories.slice(0, 3).map((cat) => (
+              <div key={cat} className="badge badge-outline badge-sm">
+                {cat.replace(/-/g, " ")}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </article>
   );
 }

@@ -1,29 +1,42 @@
 "use client";
 
-import FeaturedEventCard, { FeaturedCardData } from "./FeaturedEventCard";
+import FeaturedEventCard from "./FeaturedEventCard";
+// use the shared ExploreCardData shape
+import type { ExploreCardData } from "./EventCard";
 
 type Props = {
-  featuredCards: FeaturedCardData[];
-  onCardClick: (card: FeaturedCardData) => void; // Add this prop
+  featuredCards: ExploreCardData[];
+  onCardClick?: (card: ExploreCardData) => void;
   title?: string | null;
+  onStarChange?: (cardId: string, nextStarred: boolean) => void;
 };
 
-export default function FeaturedCarousel({ featuredCards, onCardClick, title = "Featured Events" }: Props) {
-  if (!featuredCards || featuredCards.length === 0) {
-    return null;
-  }
+export default function FeaturedCarousel({
+  featuredCards,
+  onCardClick,
+  title = "Featured Events",
+  onStarChange,
+}: Props) {
+  if (!featuredCards || featuredCards.length === 0) return null;
 
   return (
     <div className="p-4 border-b">
-      <h2 className="text-lg font-bold mb-3">{title}</h2>
-      <div className="carousel carousel-center w-full space-x-4">
+      {title !== null && (
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{title}</h3>
+        </div>
+      )}
+
+      <div className="flex gap-4 overflow-x-auto py-2 px-1 snap-x">
         {featuredCards.map((card) => (
-          // Pass the onClick handler to each card
-          <FeaturedEventCard
-            key={card.id}
-            card={card}
-            onClick={() => onCardClick(card)}
-          />
+          <div key={card.id} className="snap-start">
+            <FeaturedEventCard
+              card={card}
+              onClick={() => onCardClick?.(card)}
+              // FeaturedEventCard expects onStarChange(cardId, next)
+              onStarChange={(id, next) => onStarChange?.(id, next)}
+            />
+          </div>
         ))}
       </div>
     </div>
