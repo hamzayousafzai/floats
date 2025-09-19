@@ -5,14 +5,14 @@ import { ArrowLeft } from "lucide-react";
 
 export const revalidate = 0;
 
-export default async function EditEventPage({ params }: { params: { id: string } }) {
+export default async function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createSupabaseServer();
-
+  const { id: eventId } = await params;
   // Fetch the event being edited
   const { data: event, error } = await supabase
     .from("events")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", eventId)
     .single();
 
   if (error || !event) {
