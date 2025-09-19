@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   eslint: {
       // Allow deploys even if ESLint finds problems
       ignoreDuringBuilds: true,
-    },
+  },
   images: {
     remotePatterns: [
       {
