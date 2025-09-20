@@ -63,17 +63,40 @@ export async function POST(req: Request) {
     if (first.series_notes) rpcPayload.series_notes = first.series_notes;
     if (first.series_id) rpcPayload.series_id = first.series_id;
 
-    // Call RPC: function expects single jsonb param named "p"
-    const { data, error } = await adminClient.rpc("admin_create_events_with_series", { p: rpcPayload });
+    // If we have series_id, add it to the payload
+    if (first.series_id) rpcPayload.series_id = first.series_id;
 
-    if (error) {
-      console.error("RPC error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    // Best practice: Directly call RPC with strongly-typed handling of the response
+    const result = await adminClient.rpc(
+      "admin_create_events_with_series", 
+      { p: rpcPayload }
+    );
+    
+    // Handle errors from the RPC call
+    if (result.error) {
+      console.error("RPC error:", result.error);
+      return NextResponse.json({ error: result.error.message }, { status: 500 });
     }
-
+    
+    // Apply strong typing to the response data
+    interface EventCreationResult {
+      event_id: string;
+      series_id: string | null;
+    }
+    
+    // Type assertion is applied after validating the response
+    const data = result.data as EventCreationResult[] | null;
+    
+    // Now use the strongly-typed data
     const series_id = data?.[0]?.series_id ?? null;
-    const event_ids = (data ?? []).map((r: any) => r.event_id);
-    return NextResponse.json({ ok: true, series_id, event_ids, count: event_ids.length });
+    const event_ids = (data ?? []).map(r => r.event_id);
+    
+    return NextResponse.json({ 
+      ok: true, 
+      series_id, 
+      event_ids, 
+      count: event_ids.length 
+    });
   } catch (e: any) {
     console.error("admin create route error:", e);
     return NextResponse.json({ error: e?.message ?? "Internal error" }, { status: 500 });

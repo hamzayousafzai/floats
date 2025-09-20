@@ -89,7 +89,7 @@ export default function FavoriteButton({
       if (next) {
         const { error: upsertErr } = await supabase
           .from("event_stars")
-          .upsert([{ user_id: uid, event_id: eventId }], { onConflict: ["user_id", "event_id"] });
+          .upsert([{ user_id: uid, event_id: eventId }], { onConflict: "user_id,event_id" });
         if (upsertErr) throw upsertErr;
 
         const parsed = startsAt ? Date.parse(startsAt) : NaN;
@@ -97,7 +97,7 @@ export default function FavoriteButton({
         if (seriesId && isFuture) {
           const { error: followErr } = await supabase
             .from("series_follows")
-            .upsert([{ user_id: uid, seriesId }], { onConflict: ["user_id", "series_id"] });
+            .upsert([{ user_id: uid, series_id: seriesId }], { onConflict: "user_id,series_id" });
           if (followErr) console.warn("series follow upsert failed:", followErr);
         }
       } else {

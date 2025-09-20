@@ -1,6 +1,10 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
+import type { Database } from "@/lib/database.types";
+
+type EventStarsInsert = Database["public"]["Tables"]["event_stars"]["Insert"];
+type SeriesFollowsInsert = Database["public"]["Tables"]["series_follows"]["Insert"];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const eventId = (await params).id;
@@ -19,16 +23,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (delError) throw new Error(delError.message);
       return NextResponse.json({ starred: false });
     } else {
-      // Insert star
-      const { error: insertError } = await supabaseAdmin.from("event_stars").insert([{ event_id: eventId, user_id: user.id }]);
+      // typed payload and insert
+      const starPayload: EventStarsInsert = { event_id: eventId, user_id: user.id };
+      const { error: insertError } = await supabaseAdmin
+        .from("event_stars")
+        .insert([starPayload as any]);
       if (insertError) throw new Error(insertError.message);
 
       // If event has a series, auto-follow series (upsert) but only for future/ongoing occurrences
-      const { data: ev } = await supabase.from("events").select("series_id, ends_at, starts_at").eq("id", eventId).maybeSingle();
+      const { data: ev } = await supabase
+        .from("events")
+        .select("series_id, ends_at, starts_at")
+        .eq("id", eventId)
+        .maybeSingle();
+
       if (ev?.series_id) {
         const endsAt = ev.ends_at ?? ev.starts_at;
-        if (new Date(endsAt) >= new Date()) {
-          await supabaseAdmin.from("series_follows").upsert([{ user_id: user.id, series_id: ev.series_id }], { onConflict: ["user_id", "series_id"] });
+        if (endsAt && new Date(endsAt) >= new Date()) {
+          const followPayload: SeriesFollowsInsert = { user_id: user.id, series_id: ev.series_id };
+          await supabaseAdmin
+            .from("series_follows")
+            .upsert([followPayload], { onConflict: "user_id,series_id" });
         }
       }
 

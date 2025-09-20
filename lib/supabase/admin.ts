@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { type Database } from '@/lib/database.types'
+import type { Database } from '../database.types'
 
 // IMPORTANT: This client uses the SERVICE_ROLE_KEY and should only be used in secure
 // server-side environments. It bypasses all RLS policies.
