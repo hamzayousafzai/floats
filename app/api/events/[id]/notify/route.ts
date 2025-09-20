@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (enabled) {
       const { error } = await srv
         .from("event_notifications")
-        .upsert([{ user_id: user.id, event_id: eventId, notify: true, notify_before }], { onConflict: ["user_id", "event_id"] });
+        .upsert([{ user_id: user.id, event_id: eventId, notify: true, notify_before }], { onConflict: "user_id,event_id" });
       if (error) throw error;
     } else {
       const { error } = await srv

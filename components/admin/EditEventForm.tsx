@@ -13,29 +13,49 @@ type Props = {
   currentCategoryIds: Set<number>;
 };
 
+// --- NEW: explicit, non-nullable form state type
+type FormState = {
+  title: string;
+  description: string;
+  starts_at: string; // datetime-local value or empty string
+  ends_at: string; // datetime-local value or empty string
+  address: string;
+  image_url: string;
+  is_market: boolean;
+  is_featured: boolean;
+  category_ids: Set<number>;
+  vendor_id: string;
+  status: string;
+  coords: string;
+};
+
 export default function EditEventForm({ event, allCategories, currentCategoryIds }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    title: event.title,
-    description: event.description || "",
-    // Format date for <input type="datetime-local"> which requires YYYY-MM-DDTHH:mm
-    starts_at: new Date(event.starts_at).toISOString().slice(0, 16),
-    ends_at: event.ends_at ? new Date(event.ends_at).toISOString().slice(0, 16) : "",
-    address: event.address,
-    image_url: event.image_url || "",
-    is_market: event.is_market,
-    is_featured: event.is_featured,
-    // Add category_ids to the form state, initialized with the current selection
-    category_ids: currentCategoryIds,
-    vendor_id: event.vendor_id || "",
-    status: event.status,
-    // Coords are for overriding location only, so it starts empty.
-    // The original location is stored in the DB and will be kept unless new coords are entered.
-    coords: "",
-  });
 
-  function update<K extends keyof typeof form>(k: K, v: any) {
+  // safe helpers: only call new Date when we have a non-null string
+  const toInputDatetime = (v: string | null | undefined) =>
+    v ? new Date(v).toISOString().slice(0, 16) : "";
+
+  // initialize form with non-null defaults
+  const initialForm: FormState = {
+    title: event.title ?? "",
+    description: event.description ?? "",
+    starts_at: toInputDatetime(event.starts_at),
+    ends_at: toInputDatetime(event.ends_at),
+    address: event.address ?? "",
+    image_url: event.image_url ?? "",
+    is_market: (event.is_market ?? false) as boolean,
+    is_featured: (event.is_featured ?? false) as boolean,
+    category_ids: new Set(currentCategoryIds ?? []),
+    vendor_id: event.vendor_id ?? "",
+    status: (event.status ?? "confirmed") as string,
+    coords: "",
+  };
+
+  const [form, setForm] = useState<FormState>(initialForm);
+
+  function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 

@@ -17,14 +17,16 @@ export default function MapPage() {
   const handlePinClick = (pin: EventPin) => {
     const cardData: ExploreCardData = {
       id: pin.id,
-      image_url: pin.image_url ?? null,     
-      title: pin.title,
-      starts_at: pin.starts_at,
-      address: pin.address ?? "",
-      latitude: pin.lat ?? null,     
-      longitude: pin.lng ?? null,
-      description: pin.description ?? null,
-      categories: pin.categories ?? [],
+      // Normalize possible nullable fields to match ExploreCardData types
+      image_url: (pin as any).imageUrl ?? null,
+      title: (pin.title ?? "") as string,
+      starts_at: (pin as any).starts_at ?? null,
+      address: (pin as any).address ?? "",
+      latitude: (pin.lat ?? null) as number | null,
+      longitude: (pin.lng ?? null) as number | null,
+      description: (pin as any).description ?? null,
+      // EventPin may not declare categories; fall back to an empty array
+      categories: (pin as any).categories ?? [],
     };
     setSelectedEvent(cardData);
   };

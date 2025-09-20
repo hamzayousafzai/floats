@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // only upsert the existing columns (user_id, series_id)
       const { error } = await srv
         .from("series_follows")
-        .upsert([{ user_id: user.id, series_id: seriesId }], { onConflict: ["user_id", "series_id"] });
+        .upsert([{ user_id: user.id, series_id: seriesId }], { onConflict: "user_id,series_id" });
       if (error) throw error;
     } else {
       const { error } = await srv
