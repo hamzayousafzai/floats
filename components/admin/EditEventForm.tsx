@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
 import type { Database } from "@/lib/database.types";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
@@ -13,12 +14,11 @@ type Props = {
   currentCategoryIds: Set<number>;
 };
 
-// --- NEW: explicit, non-nullable form state type
 type FormState = {
   title: string;
   description: string;
-  starts_at: string; // datetime-local value or empty string
-  ends_at: string; // datetime-local value or empty string
+  starts_at: string;
+  ends_at: string;
   address: string;
   image_url: string;
   is_market: boolean;
@@ -32,12 +32,13 @@ type FormState = {
 export default function EditEventForm({ event, allCategories, currentCategoryIds }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  // safe helpers: only call new Date when we have a non-null string
+  // Helper to convert datetime string to input format
   const toInputDatetime = (v: string | null | undefined) =>
     v ? new Date(v).toISOString().slice(0, 16) : "";
 
-  // initialize form with non-null defaults
+  // Initialize form with non-null defaults
   const initialForm: FormState = {
     title: event.title ?? "",
     description: event.description ?? "",
@@ -59,7 +60,6 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  // Specific handler for checkbox changes
   function handleCategoryChange(categoryId: number, isChecked: boolean) {
     const newCategoryIds = new Set(form.category_ids);
     if (isChecked) {
@@ -70,11 +70,39 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
     update("category_ids", newCategoryIds);
   }
 
+  // Handle file upload
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      if (result.url) {
+        update("image_url", result.url);
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload image');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      // Convert the Set to an array for JSON serialization
       const body = { ...form, category_ids: Array.from(form.category_ids) };
 
       const res = await fetch(`/admin/events/${event.id}/update`, {
@@ -86,7 +114,7 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
       if (!res.ok) throw new Error(data.error || "Failed to update event");
       
       alert("Event updated successfully!");
-      router.push("/admin/events"); // Go back to the list
+      router.push("/admin/events");
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -95,93 +123,175 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
   }
 
   return (
-    <div className="max-w-2xl">
-      <h2 className="text-lg font-semibold mb-4">Edit Event: <span className="font-normal">{event.title}</span></h2>
-      <form onSubmit={submit} className="space-y-4 text-sm">
-        <div>
-          <label className="font-medium">Title</label>
-          <input required value={form.title} onChange={e=>update("title", e.target.value)} className="mt-1 w-full rounded border p-2" />
-        </div>
-        <div>
-          <label className="font-medium">Status</label>
-          <select value={form.status} onChange={e=>update("status", e.target.value)} className="mt-1 w-full rounded border p-2 bg-white">
-            <option value="confirmed">Confirmed</option>
-            <option value="pending">Pending</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-        <div>
-          <label className="font-medium">Description</label>
-          <textarea rows={3} value={form.description} onChange={e=>update("description", e.target.value)} className="mt-1 w-full rounded border p-2" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="font-medium">Starts At</label>
-            <input required type="datetime-local" value={form.starts_at} onChange={e=>update("starts_at", e.target.value)} className="mt-1 w-full rounded border p-2" />
-          </div>
-          <div>
-            <label className="font-medium">Ends At</label>
-            <input type="datetime-local" value={form.ends_at} onChange={e=>update("ends_at", e.target.value)} className="mt-1 w-full rounded border p-2" />
-          </div>
-        </div>
-        <div>
-          <label className="font-medium">Address</label>
-          <input required value={form.address} onChange={e=>update("address", e.target.value)} className="mt-1 w-full rounded border p-2" />
-        </div>
-        <div>
-          <label className="font-medium">Image URL</label>
-          <input value={form.image_url} onChange={e=>update("image_url", e.target.value)} className="mt-1 w-full rounded border p-2" />
-        </div>
-        <div className="flex items-center gap-2">
-          <input id="is_market" type="checkbox" checked={form.is_market} onChange={e=>update("is_market", e.target.checked)} />
-          <label htmlFor="is_market">Is this a market-style event?</label>
-        </div>
-        <div className="flex items-center gap-2">
-          <input id="is_featured" type="checkbox" checked={form.is_featured} onChange={e=>update("is_featured", e.target.checked)} />
-          <label htmlFor="is_featured">Feature this event on the Explore page?</label>
-        </div>
+    <form onSubmit={submit} className="space-y-4">
+      {/* Title */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Title</label>
+        <input
+          type="text"
+          value={form.title}
+          onChange={(e) => update("title", e.target.value)}
+          className="input input-bordered w-full"
+          required
+        />
+      </div>
 
-        {/* Add the Category Selection section */}
-        <div>
-          <label className="font-medium">Categories</label>
-          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 p-3 border rounded-lg">
-            {allCategories.map((category) => (
-              <div key={category.id} className="flex items-center gap-2">
-                <input
-                  id={`cat-${category.id}`}
-                  type="checkbox"
-                  checked={form.category_ids.has(category.id)}
-                  onChange={(e) => handleCategoryChange(category.id, e.target.checked)}
-                />
-                <label htmlFor={`cat-${category.id}`}>{category.name}</label>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Description */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          value={form.description}
+          onChange={(e) => update("description", e.target.value)}
+          className="textarea textarea-bordered w-full"
+          rows={3}
+        />
+      </div>
 
-        <div>
-          <label className="font-medium">Vendor ID (optional)</label>
-          <input value={form.vendor_id} onChange={e=>update("vendor_id", e.target.value)} className="mt-1 w-full rounded border p-2" />
-        </div>
+      {/* Current Image Display & Upload */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Event Image</label>
         
-        <div className="p-3 border rounded bg-gray-50">
-          <div>
-            <label className="font-medium">Override Coordinates (optional)</label>
-            <input 
-              type="text" 
-              placeholder="e.g., (35.2271, -80.8431)"
-              value={form.coords} 
-              onChange={e=>update("coords", e.target.value)} 
-              className="mt-1 w-full rounded border p-2" 
-            />
-            <p className="text-xs text-gray-500 mt-1">Leave blank to keep the original location. Enter new coordinates to override.</p>
+        {/* Current Image Preview */}
+        {form.image_url && (
+          <div className="mb-3">
+            <p className="text-sm text-gray-600 mb-2">Current image:</p>
+            <div className="relative w-full h-48 rounded-lg overflow-hidden border">
+              <Image
+                src={form.image_url}
+                alt="Current event image"
+                fill
+                className="object-cover"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        <button disabled={saving} className="rounded bg-black text-white px-5 py-2 text-sm disabled:opacity-50">
-          {saving ? "Saving..." : "Update Event"}
+        {/* File Upload Input */}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileUpload}
+          disabled={uploading}
+          className="file-input file-input-bordered w-full"
+        />
+        
+        {uploading && (
+          <p className="text-sm text-blue-600 mt-1">Uploading image...</p>
+        )}
+
+        {/* Manual URL Input (fallback) */}
+        <div className="mt-3">
+          <label className="block text-xs text-gray-500 mb-1">Or enter image URL manually:</label>
+          <input
+            type="url"
+            value={form.image_url}
+            onChange={(e) => update("image_url", e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            className="input input-bordered input-sm w-full"
+          />
+        </div>
+      </div>
+
+      {/* Date/Time Fields */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Starts At</label>
+          <input
+            type="datetime-local"
+            value={form.starts_at}
+            onChange={(e) => update("starts_at", e.target.value)}
+            className="input input-bordered w-full"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Ends At</label>
+          <input
+            type="datetime-local"
+            value={form.ends_at}
+            onChange={(e) => update("ends_at", e.target.value)}
+            className="input input-bordered w-full"
+            required
+          />
+        </div>
+      </div>
+
+      {/* Address */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Address</label>
+        <input
+          type="text"
+          value={form.address}
+          onChange={(e) => update("address", e.target.value)}
+          className="input input-bordered w-full"
+        />
+      </div>
+
+      {/* Checkboxes */}
+      <div className="space-y-2">
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={form.is_market}
+            onChange={(e) => update("is_market", e.target.checked)}
+            className="checkbox"
+          />
+          <span className="text-sm">Is Market Event</span>
+        </label>
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={form.is_featured}
+            onChange={(e) => update("is_featured", e.target.checked)}
+            className="checkbox"
+          />
+          <span className="text-sm">Featured Event</span>
+        </label>
+      </div>
+
+      {/* Categories */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Categories</label>
+        <div className="space-y-1">
+          {allCategories.map((cat) => (
+            <label key={cat.id} className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={form.category_ids.has(cat.id)}
+                onChange={(e) => handleCategoryChange(cat.id, e.target.checked)}
+                className="checkbox checkbox-sm"
+              />
+              <span className="text-sm">{cat.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Status */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Status</label>
+        <select
+          value={form.status}
+          onChange={(e) => update("status", e.target.value)}
+          className="select select-bordered w-full"
+        >
+          <option value="scheduled">Scheduled</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+
+      {/* Submit Button */}
+      <div className="pt-4">
+        <button
+          type="submit"
+          disabled={saving || uploading}
+          className="btn btn-primary w-full"
+        >
+          {saving ? "Updating..." : "Update Event"}
         </button>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }
