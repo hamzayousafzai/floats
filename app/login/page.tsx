@@ -56,8 +56,8 @@ export default function LoginPage() {
       if (vErr) {
         const retry = await supabase.auth.verifyOtp({
           email: email.trim().toLowerCase(),
-            token: code,
-            type: "signup",
+          token: code,
+          type: "signup",
         });
         data = retry.data;
         vErr = retry.error;
@@ -93,27 +93,34 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md border rounded-xl p-6 space-y-6">
-        <h1 className="text-xl font-semibold">Sign in</h1>
+    <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
+      <div className="w-full max-w-md border bg-white rounded-xl p-6 space-y-6 shadow-sm">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800">
+            Join Floats
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Discover local markets and pop-ups in Charlotte. Save your favorites, set reminders, and never miss out.
+          </p>
+        </div>
 
         {step === "request" && (
           <form onSubmit={requestCode} className="space-y-4">
             <label className="block text-sm">
-              Email
+              Enter your email
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full border rounded px-3 py-2"
+                className="mt-1 w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
             </label>
             <button
               type="submit"
-              className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
+              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
               disabled={!email || sent}
             >
               {sent ? "Code sent ✓" : "Send code"}
@@ -123,12 +130,12 @@ export default function LoginPage() {
 
         {step === "verify" && (
           <form onSubmit={verifyCode} className="space-y-4">
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 text-center">
               We sent a 6‑digit code to
               <span className="font-medium"> {email}</span>
             </div>
             <label className="block text-sm">
-              Code
+              Verification Code
               <input
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -138,22 +145,22 @@ export default function LoginPage() {
                 onChange={(e) =>
                   setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                 }
-                className="mt-1 tracking-widest text-center text-lg font-medium w-full border rounded px-3 py-2"
+                className="mt-1 tracking-widest text-center text-lg font-medium w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="••••••"
               />
             </label>
             <button
               type="submit"
-              className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
+              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
               disabled={code.length !== 6 || verifying}
             >
-              {verifying ? "Verifying..." : "Verify"}
+              {verifying ? "Verifying..." : "Verify & Sign In"}
             </button>
             <div className="flex justify-between text-xs text-gray-500">
               <button
                 type="button"
                 onClick={() => setStep("request")}
-                className="underline"
+                className="underline hover:text-black"
               >
                 Change email
               </button>
@@ -161,7 +168,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={resend}
                 disabled={resending}
-                className="underline disabled:opacity-50"
+                className="underline hover:text-black disabled:opacity-50"
               >
                 {resending ? "Resending..." : "Resend code"}
               </button>
@@ -169,9 +176,9 @@ export default function LoginPage() {
           </form>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
 
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 text-center">
           Enter your email to receive a one‑time code. No password required.
         </p>
       </div>
