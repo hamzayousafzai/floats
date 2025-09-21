@@ -90,14 +90,12 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
 
   const getDirectionsUrl = useCallback(() => {
     if (!event) return "#";
-    if (event.latitude && event.longitude) {
-      return `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`;
-    }
+    // Prioritize address for more accurate navigation
     if (event.address) {
       return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`;
     }
     return "#";
-  }, [event?.latitude, event?.longitude, event?.address]);
+  }, [event?.address, event?.latitude, event?.longitude]);
 
   const canGetDirections = useMemo(
     () => !!(event?.address || (event?.latitude && event?.longitude)),

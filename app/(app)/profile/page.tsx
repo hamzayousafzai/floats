@@ -22,6 +22,13 @@ export default async function ProfilePage() {
     .single();
   const isAdmin = !!adminRecord;
 
+  // Get count of events with notifications enabled
+  const { count: remindedCount } = await supabase
+    .from("event_notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("notify", true);
+
   // Load starred events (two-step for clarity/RLS-friendliness)
   const { data: starRows } = await supabase
     .from("event_stars")
@@ -90,7 +97,6 @@ export default async function ProfilePage() {
   const orderedFavorites = [...upcoming, ...past];
 
   const favoriteCount = orderedFavorites.length;
-  const visitedCount = 12; // TODO
 
   const initials = (user.user_metadata?.name || user.email || "?")
     .split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -119,8 +125,8 @@ export default async function ProfilePage() {
             <div className="text-xs text-gray-500">Favorites</div>
           </div>
           <div className="rounded-xl border px-4 py-3 text-center">
-            <div className="text-xl font-semibold">{visitedCount}</div>
-            <div className="text-xs text-gray-500">Visited</div>
+            <div className="text-xl font-semibold">{remindedCount ?? 0}</div>
+            <div className="text-xs text-gray-500">Reminded</div>
           </div>
         </section>
 

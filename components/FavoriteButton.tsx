@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export type FavoriteButtonProps = {
   eventId: string;
@@ -29,6 +30,7 @@ export default function FavoriteButton({
   onChange,
 }: FavoriteButtonProps) {
   const supabase = createSupabaseBrowserClient();
+  const router = useRouter();
   const [loading, setLoading] = useState<boolean>(false);
   const [starred, setStarred] = useState<boolean>(!!initialStarred);
 
@@ -72,9 +74,16 @@ export default function FavoriteButton({
       }
     })();
     return () => { active = false; };
-  }, [eventId, initialStarred, supabase]);
+  }, [eventId, initialStarred, supabase, onChange]);
 
   const toggle = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+      router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      return;
+    }
+
     if (loading) return;
     setLoading(true);
     const next = !starred;
@@ -82,9 +91,7 @@ export default function FavoriteButton({
     onChange?.(next);
 
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) throw new Error("Please sign in to save favorites.");
-      const uid = auth.user.id;
+      const uid = user.id;
 
       if (next) {
         const { error: upsertErr } = await supabase
@@ -115,7 +122,7 @@ export default function FavoriteButton({
     } finally {
       setLoading(false);
     }
-  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange]);
+  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange, router]);
 
   const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "btn-md";
 
