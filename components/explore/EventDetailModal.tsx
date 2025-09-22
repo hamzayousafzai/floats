@@ -142,6 +142,61 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     }
   }, [event?.id, event?.title, event?.description]);
 
+  // Helper function to format dates consistently in EST
+  const formatEventTime = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString("en-US", {
+      timeZone: "America/New_York", // EST/EDT
+      dateStyle: "full",
+      timeStyle: "short"
+    });
+  }, []);
+
+  const formatEventTimeRange = useCallback((startsAt: string, endsAt?: string | null) => {
+    const startDate = new Date(startsAt);
+    
+    const startFormatted = startDate.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      weekday: "long",
+      year: "numeric",
+      month: "long", 
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
+
+    if (!endsAt) {
+      return startFormatted;
+    }
+
+    const endDate = new Date(endsAt);
+    const isSameDay = startDate.toDateString() === endDate.toDateString();
+    
+    if (isSameDay) {
+      // Same day - show end time only
+      const endTime = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      });
+      return `${startFormatted} - ${endTime}`;
+    } else {
+      // Different days - show full end date/time
+      const endFormatted = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        weekday: "long",
+        month: "long",
+        day: "numeric", 
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      });
+      return `${startFormatted} - ${endFormatted}`;
+    }
+  }, []);
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
@@ -188,7 +243,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
           <div className="mt-2 space-y-2 text-sm">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-500" />
-              <span>{new Date(event.starts_at).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}</span>
+              <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-gray-500" />

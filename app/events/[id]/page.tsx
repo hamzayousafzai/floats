@@ -2,8 +2,6 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import FavoriteButton from "@/components/FavoriteButton";
-import NotificationBell from "@/components/NotificationBell";
 import ShareButton from "@/components/ShareButton";
 import { Calendar, MapPin, Download, Navigation } from "lucide-react";
 
@@ -31,15 +29,61 @@ export default async function EventDetailPage({ params }: Props) {
     notFound();
   }
 
+  // Helper function to format event time range in EST
+  const formatEventTimeRange = (startsAt: string, endsAt?: string | null) => {
+    const startDate = new Date(startsAt);
+
+    const startFormatted = startDate.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    if (!endsAt) {
+      return startFormatted;
+    }
+
+    const endDate = new Date(endsAt);
+    const isSameDay = startDate.toDateString() === endDate.toDateString();
+
+    if (isSameDay) {
+      // Same day - show end time only
+      const endTime = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `${startFormatted} - ${endTime}`;
+    } else {
+      // Different days - show full end date/time
+      const endFormatted = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `${startFormatted} - ${endFormatted}`;
+    }
+  };
+
   const canGetDirections =
     Boolean(event.address) || (event.latitude && event.longitude);
   const getDirectionsUrl =
-    event.latitude && event.longitude
-      ? `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`
-      : event.address
+    event.address
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           event.address
         )}`
+      : event.latitude && event.longitude
+      ? `https://www.google.com/maps/search/?api=1&query=${event.latitude},${event.longitude}`
       : "#";
 
   return (
@@ -68,10 +112,7 @@ export default async function EventDetailPage({ params }: Props) {
               <Calendar className="h-4 w-4 text-gray-500" />
               <div>
                 {event.starts_at
-                  ? new Date(event.starts_at).toLocaleString("en-US", {
-                      dateStyle: "full",
-                      timeStyle: "short",
-                    })
+                  ? formatEventTimeRange(event.starts_at, event.ends_at)
                   : "Time TBD"}
               </div>
             </div>
@@ -91,9 +132,8 @@ export default async function EventDetailPage({ params }: Props) {
 
         {/* Controls */}
         <aside className="flex flex-col items-end gap-3">
-
           <Link href="/explore" className="btn btn-outline btn-md">
-              Explore All Events
+            Explore All Events
           </Link>
 
           <div className="flex flex-col gap-2 mt-2 w-full">

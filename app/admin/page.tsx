@@ -6,9 +6,9 @@ export default function AdminHome() {
     <main className="p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Admin Dashboard</h2>
-        <Link href="/map" className="flex items-center gap-2 text-sm text-gray-600 hover:text-black">
+        <Link href="/profile" className="flex items-center gap-2 text-sm text-gray-600 hover:text-black">
           <ArrowLeft className="h-4 w-4" />
-          Back to Map
+          Back to Profile
         </Link>
       </div>
       <div className="border rounded-lg p-4">
