@@ -1,11 +1,11 @@
-// app/profile/page.tsx
 export const revalidate = 0;
 
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import SignOutButton from "@/components/SignOutButton";
 import Link from "next/link";
-import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection"; // NEW
+import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection";
+import ProfileHeader from "@/components/profile/ProfileHeader";
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServer();
@@ -88,35 +88,15 @@ export default async function ProfilePage() {
     });
   }
 
-  const now = Date.now();
-  const upcoming = favoriteEvents.filter(e => Date.parse(String(e.starts_at)) > now)
-    .sort((a, b) => Date.parse(String(a.starts_at)) - Date.parse(String(b.starts_at)));
-  const past = favoriteEvents.filter(e => Date.parse(String(e.starts_at)) <= now)
-    .sort((a, b) => Date.parse(String(b.starts_at)) - Date.parse(String(a.starts_at)));
-
-  const orderedFavorites = [...upcoming, ...past];
-
-  const favoriteCount = orderedFavorites.length;
-
+  const favoriteCount = favoriteEvents.length;
   const initials = (user.user_metadata?.name || user.email || "?")
     .split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <main className="px-4 pt-6">
       <div className="mx-auto w-full max-w-md space-y-8 pb-10">
-        {/* Header */}
-        <section className="flex items-start justify-between">
-          <div className="flex gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white text-lg font-medium">
-              {initials}
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold">{user.user_metadata?.name || "Your Profile"}</h1>
-              <p className="text-sm text-gray-600">{user.email}</p>
-            </div>
-          </div>
-          <SignOutButton />
-        </section>
+        {/* Header - moved to client component */}
+        <ProfileHeader user={user} />
 
         {/* Stats */}
         <section className="grid grid-cols-2 gap-4">
@@ -138,24 +118,24 @@ export default async function ProfilePage() {
         )}
 
         {/* Favorites */}
-          {favoriteCount === 0 ? (
-            <div className="rounded-xl border px-6 py-10 text-center">
-              <div className="mb-4 flex justify-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                  <span className="text-gray-400 text-2xl">♡</span>
-                </div>
+        {favoriteCount === 0 ? (
+          <div className="rounded-xl border px-6 py-10 text-center">
+            <div className="mb-4 flex justify-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <span className="text-gray-400 text-2xl">♡</span>
               </div>
-              <p className="text-sm font-medium">No favorites yet</p>
-              <p className="mx-auto mt-2 max-w-xs text-xs text-gray-500">
-                Start exploring events and tap the Favorite button to save them!
-              </p>
-              <Link href="/explore" className="mt-5 inline-block rounded-md bg-black px-4 py-2 text-xs font-medium text-white">
-                Explore Events
-              </Link>
             </div>
-          ) : (
-            <FavoriteEventsSection events={orderedFavorites} />
-          )}
+            <p className="text-sm font-medium">No favorites yet</p>
+            <p className="mx-auto mt-2 max-w-xs text-xs text-gray-500">
+              Start exploring events and tap the Favorite button to save them!
+            </p>
+            <Link href="/explore" className="mt-5 inline-block rounded-md bg-black px-4 py-2 text-xs font-medium text-white">
+              Explore Events
+            </Link>
+          </div>
+        ) : (
+          <FavoriteEventsSection events={favoriteEvents} />
+        )}
       </div>
     </main>
   );

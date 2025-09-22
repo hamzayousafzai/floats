@@ -20,14 +20,55 @@ export default function FeaturedEventCard({
   onStarChange?: (id: string, next: boolean) => void;
   className?: string;
 }) {
-  const dateText = card.starts_at
-    ? new Date(card.starts_at).toLocaleString("en-US", {
+  // Add this temporarily in FeaturedEventCard to debug
+  console.log('Card data:', { starts_at: card.starts_at, ends_at: card.ends_at });
+
+  const formatEventTimeRange = (startsAt: string, endsAt?: string | null) => {
+    const startDate = new Date(startsAt);
+
+    const startFormatted = startDate.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    if (!endsAt) {
+      return startFormatted;
+    }
+
+    const endDate = new Date(endsAt);
+    const isSameDay = startDate.toDateString() === endDate.toDateString();
+
+    if (isSameDay) {
+      // Same day - show end time only
+      const endTime = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `${startFormatted} - ${endTime}`;
+    } else {
+      // Different days - show full end date/time
+      const endFormatted = endDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
         weekday: "short",
         month: "short",
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
-      })
+        hour12: true,
+      });
+      return `${startFormatted} - ${endFormatted}`;
+    }
+  };
+
+  const dateText = card.starts_at
+    ? formatEventTimeRange(card.starts_at, card.ends_at)
     : "";
 
   return (
@@ -42,7 +83,8 @@ export default function FeaturedEventCard({
           <Image
             src={card.image_url}
             alt={card.title ?? "event image"}
-            fill className="object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
@@ -66,9 +108,7 @@ export default function FeaturedEventCard({
           </div>
         </div>
 
-        {dateText && (
-          <p className="text-xs text-gray-500 mt-1">{dateText}</p>
-        )}
+        {dateText && <p className="text-xs text-gray-500 mt-1">{dateText}</p>}
 
         {card.address && (
           <div className="mt-2 flex items-center gap-2 text-xs text-base-content/70">

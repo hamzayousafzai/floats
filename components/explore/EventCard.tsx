@@ -9,12 +9,12 @@ export type ExploreCardData = {
   image_url: string | null;
   title: string;
   starts_at: string;
+  ends_at?: string | null; // Add this field
   address: string;
-  latitude?: number | null;  // Ensure these are in the type
-  longitude?: number | null; // Ensure these are in the type
+  latitude?: number | null;
+  longitude?: number | null;
   description?: string | null;
   categories: string[];
-
   is_starred?: boolean;
   is_notified?: boolean;
   is_series_followed?: boolean;
@@ -28,12 +28,17 @@ type Props = {
 
 export default function EventCard({ card, onClick }: Props) {
   const eventDate = new Date(card.starts_at);
+
+  // Format with EST timezone
   const formattedDate = eventDate.toLocaleString("en-US", {
+    timeZone: "America/New_York",
     weekday: "short",
     month: "short",
     day: "numeric",
   });
+
   const formattedTime = eventDate.toLocaleString("en-US", {
+    timeZone: "America/New_York",
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -73,7 +78,9 @@ export default function EventCard({ card, onClick }: Props) {
         <div className="mt-2 space-y-1.5 text-sm text-base-content/70">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 flex-shrink-0" />
-            <span>{formattedDate} at {formattedTime}</span>
+            <span>
+              {formattedDate} at {formattedTime}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 flex-shrink-0" />
@@ -81,7 +88,6 @@ export default function EventCard({ card, onClick }: Props) {
           </div>
         </div>
       </div>
-        {/* existing action buttons like Directions, Share, etc. */}
-      </div>
+    </div>
   );
 }
