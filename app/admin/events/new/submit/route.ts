@@ -1,39 +1,23 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { toDate } from 'date-fns-tz';
-
-/**
- * Convert a datetime string from EST to UTC
- * The input is a local time string like "2025-09-30T13:00" that represents EST time
- * We need to convert it to UTC by ADDING the offset (4-5 hours)
- */
-function convertESTtoUTC(dateTimeString: string): string {
-  if (!dateTimeString) return dateTimeString;
-  
-  // Parse the string and treat it as America/New_York timezone
-  // toDate interprets the string in the given timezone
-  const estDate = toDate(dateTimeString, { timeZone: 'America/New_York' });
-  
-  return estDate.toISOString();
-}
+import { convertToUTC } from "@/lib/timezone"; // Import the new utility
 
 export async function POST(req: Request) {
+  // Auth & Admin checks
   const srv = await createSupabaseServer();
   const { data: { user } } = await srv.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Admin check
   const { data: admin } = await srv.from("app_admins").select("user_id").eq("user_id", user.id).maybeSingle();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // parse + normalize payload
   const raw = await req.json().catch(() => null);
-  console.log("admin create payload (before timezone conversion):", raw);
 
   let vendorName: string | undefined;
   let events: any[] | undefined;
 
+  // Normalize payload
   if (Array.isArray(raw)) {
     events = raw;
     vendorName = raw[0]?.vendor_name;
@@ -61,22 +45,12 @@ export async function POST(req: Request) {
   try {
     const adminClient = createSupabaseAdmin();
 
-    // Convert all event times from EST to UTC
-    const convertedEvents = events.map(event => {
-      const converted = { ...event };
-      
-      if (event.starts_at) {
-        converted.starts_at = convertESTtoUTC(event.starts_at);
-        console.log(`Converted start: ${event.starts_at} (EST) -> ${converted.starts_at} (UTC)`);
-      }
-      
-      if (event.ends_at) {
-        converted.ends_at = convertESTtoUTC(event.ends_at);
-        console.log(`Converted end: ${event.ends_at} (EST) -> ${converted.ends_at} (UTC)`);
-      }
-      
-      return converted;
-    });
+    // Use the safe utility to convert times for all events
+    const convertedEvents = events.map(event => ({
+      ...event,
+      starts_at: convertToUTC(event.starts_at),
+      ends_at: convertToUTC(event.ends_at),
+    }));
 
     // Build RPC payload with converted times
     const rpcPayload: any = { vendor_name: vendorName, events: convertedEvents };
