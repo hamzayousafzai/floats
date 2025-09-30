@@ -1,6 +1,16 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { toDate } from 'date-fns-tz';
+
+/**
+ * Convert a datetime string from EST to UTC
+ */
+function convertESTtoUTC(dateTimeString: string): string {
+  if (!dateTimeString) return dateTimeString;
+  const estDate = toDate(dateTimeString, { timeZone: 'America/New_York' });
+  return estDate.toISOString();
+}
 
 export async function POST(
   req: NextRequest,
@@ -15,7 +25,17 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    // It's good practice to also check if the user has an 'admin' role here.
+
+    // Admin check
+    const { data: admin } = await supabase
+      .from("app_admins")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    
+    if (!admin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const body = await req.json();
     
@@ -43,12 +63,22 @@ export async function POST(
     // Prepare the payload for the 'events' table update
     const updatePayload: any = {
       ...eventData,
-      starts_at: new Date(eventData.starts_at).toISOString(),
-      ends_at: eventData.ends_at ? new Date(eventData.ends_at).toISOString() : null,
+      // Convert EST times to UTC for storage
+      starts_at: eventData.starts_at ? convertESTtoUTC(eventData.starts_at) : undefined,
+      ends_at: eventData.ends_at ? convertESTtoUTC(eventData.ends_at) : null,
     };
 
+    // Add geometry if present
     if (geomWkt) {
       updatePayload.geom = geomWkt;
+    }
+
+    // Log the conversion for debugging
+    if (eventData.starts_at) {
+      console.log(`Converted start: ${eventData.starts_at} (EST) -> ${updatePayload.starts_at} (UTC)`);
+    }
+    if (eventData.ends_at) {
+      console.log(`Converted end: ${eventData.ends_at} (EST) -> ${updatePayload.ends_at} (UTC)`);
     }
 
     // Use the admin client for all database modifications

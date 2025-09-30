@@ -8,7 +8,7 @@ export const revalidate = 0;
 export default async function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createSupabaseServer();
   const { id: eventId } = await params;
-  // Fetch the event being edited
+  
   const { data: event, error } = await supabase
     .from("events")
     .select("*")
@@ -19,16 +19,12 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
     return <p className="p-4">Event not found or error loading: {error?.message}</p>;
   }
 
-  // 1. Fetch all available categories
   const { data: allCategories } = await supabase.from("categories").select("id, name");
-
-  // 2. Fetch the IDs of categories currently linked to this event
   const { data: eventCategories } = await supabase
     .from("event_categories")
     .select("category_id")
     .eq("event_id", event.id);
 
-  // Create a Set of the current category IDs for easy lookup
   const currentCategoryIds = new Set(eventCategories?.map(ec => ec.category_id) ?? []);
 
   return (
@@ -40,7 +36,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
           Back to Events
         </Link>
       </div>
-      {/* 3. Pass all the data to the form component */}
+      {/* Pass the ORIGINAL event object directly to the form */}
       <EditEventForm
         event={event}
         allCategories={allCategories ?? []}

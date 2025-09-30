@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { toDate } from 'date-fns-tz';
+
+/**
+ * Convert a datetime string from EST to UTC
+ * The input is a local time string like "2025-09-30T13:00" that represents EST time
+ * We need to convert it to UTC by ADDING the offset (4-5 hours)
+ */
+function convertESTtoUTC(dateTimeString: string): string {
+  if (!dateTimeString) return dateTimeString;
+  
+  // Parse the string and treat it as America/New_York timezone
+  // toDate interprets the string in the given timezone
+  const estDate = toDate(dateTimeString, { timeZone: 'America/New_York' });
+  
+  return estDate.toISOString();
+}
 
 export async function POST(req: Request) {
   const srv = await createSupabaseServer();
@@ -13,7 +29,7 @@ export async function POST(req: Request) {
 
   // parse + normalize payload
   const raw = await req.json().catch(() => null);
-  console.log("admin create payload:", raw);
+  console.log("admin create payload (before timezone conversion):", raw);
 
   let vendorName: string | undefined;
   let events: any[] | undefined;
@@ -45,26 +61,42 @@ export async function POST(req: Request) {
   try {
     const adminClient = createSupabaseAdmin();
 
-    // Build RPC payload and ensure the function sees recurring intent:
-    const rpcPayload: any = { vendor_name: vendorName, events };
+    // Convert all event times from EST to UTC
+    const convertedEvents = events.map(event => {
+      const converted = { ...event };
+      
+      if (event.starts_at) {
+        converted.starts_at = convertESTtoUTC(event.starts_at);
+        console.log(`Converted start: ${event.starts_at} (EST) -> ${converted.starts_at} (UTC)`);
+      }
+      
+      if (event.ends_at) {
+        converted.ends_at = convertESTtoUTC(event.ends_at);
+        console.log(`Converted end: ${event.ends_at} (EST) -> ${converted.ends_at} (UTC)`);
+      }
+      
+      return converted;
+    });
+
+    // Build RPC payload with converted times
+    const rpcPayload: any = { vendor_name: vendorName, events: convertedEvents };
 
     // If multiple dates provided, mark recurring so the function will create/upsert a series
-    if (events.length > 1) {
+    if (convertedEvents.length > 1) {
       rpcPayload.is_recurring = true;
       // optionally set a default series_title from the first event title
-      if (!rpcPayload.series_title && events[0]?.title) {
-        rpcPayload.series_title = events[0].title;
+      if (!rpcPayload.series_title && convertedEvents[0]?.title) {
+        rpcPayload.series_title = convertedEvents[0].title;
       }
     }
 
     // If the first event carries explicit series fields, pass them through
-    const first = events[0] ?? {};
+    const first = convertedEvents[0] ?? {};
     if (first.series_title) rpcPayload.series_title = first.series_title;
     if (first.series_notes) rpcPayload.series_notes = first.series_notes;
     if (first.series_id) rpcPayload.series_id = first.series_id;
 
-    // If we have series_id, add it to the payload
-    if (first.series_id) rpcPayload.series_id = first.series_id;
+    console.log("Final RPC payload with UTC times:", rpcPayload);
 
     // Best practice: Directly call RPC with strongly-typed handling of the response
     const result = await adminClient.rpc(
