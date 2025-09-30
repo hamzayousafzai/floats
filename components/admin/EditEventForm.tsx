@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Image from "next/image";
 import type { Database } from "@/lib/database.types";
+import { toZonedTime, format } from "date-fns-tz";
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type Category = { id: number; name: string; };
@@ -29,14 +30,24 @@ type FormState = {
   coords: string;
 };
 
+const TZ = "America/New_York";
+
 export default function EditEventForm({ event, allCategories, currentCategoryIds }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Helper to convert datetime string to input format
-  const toInputDatetime = (v: string | null | undefined) =>
-    v ? new Date(v).toISOString().slice(0, 16) : "";
+  // Helper to convert UTC datetime string to NY wall-time for input
+  const toInputDatetime = (v: string | null | undefined) => {
+    if (!v) return "";
+    try {
+      const zoned = toZonedTime(v, TZ); // take stored UTC and view it in NY wall time
+      return format(zoned, "yyyy-MM-dd'T'HH:mm"); // format for datetime-local input
+    } catch (error) {
+      console.error("Error formatting date:", v, error);
+      return ""; // Fallback on error
+    }
+  };
 
   // Initialize form with non-null defaults
   const initialForm: FormState = {

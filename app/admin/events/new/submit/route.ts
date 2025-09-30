@@ -1,23 +1,23 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { convertToUTC } from "@/lib/timezone"; // Import the new utility
 
 export async function POST(req: Request) {
+  // Auth & Admin checks
   const srv = await createSupabaseServer();
   const { data: { user } } = await srv.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Admin check
   const { data: admin } = await srv.from("app_admins").select("user_id").eq("user_id", user.id).maybeSingle();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // parse + normalize payload
   const raw = await req.json().catch(() => null);
-  console.log("admin create payload:", raw);
 
   let vendorName: string | undefined;
   let events: any[] | undefined;
 
+  // Normalize payload
   if (Array.isArray(raw)) {
     events = raw;
     vendorName = raw[0]?.vendor_name;
@@ -45,26 +45,32 @@ export async function POST(req: Request) {
   try {
     const adminClient = createSupabaseAdmin();
 
-    // Build RPC payload and ensure the function sees recurring intent:
-    const rpcPayload: any = { vendor_name: vendorName, events };
+    // Use the safe utility to convert times for all events
+    const convertedEvents = events.map(event => ({
+      ...event,
+      starts_at: convertToUTC(event.starts_at),
+      ends_at: convertToUTC(event.ends_at),
+    }));
+
+    // Build RPC payload with converted times
+    const rpcPayload: any = { vendor_name: vendorName, events: convertedEvents };
 
     // If multiple dates provided, mark recurring so the function will create/upsert a series
-    if (events.length > 1) {
+    if (convertedEvents.length > 1) {
       rpcPayload.is_recurring = true;
       // optionally set a default series_title from the first event title
-      if (!rpcPayload.series_title && events[0]?.title) {
-        rpcPayload.series_title = events[0].title;
+      if (!rpcPayload.series_title && convertedEvents[0]?.title) {
+        rpcPayload.series_title = convertedEvents[0].title;
       }
     }
 
     // If the first event carries explicit series fields, pass them through
-    const first = events[0] ?? {};
+    const first = convertedEvents[0] ?? {};
     if (first.series_title) rpcPayload.series_title = first.series_title;
     if (first.series_notes) rpcPayload.series_notes = first.series_notes;
     if (first.series_id) rpcPayload.series_id = first.series_id;
 
-    // If we have series_id, add it to the payload
-    if (first.series_id) rpcPayload.series_id = first.series_id;
+    console.log("Final RPC payload with UTC times:", rpcPayload);
 
     // Best practice: Directly call RPC with strongly-typed handling of the response
     const result = await adminClient.rpc(
