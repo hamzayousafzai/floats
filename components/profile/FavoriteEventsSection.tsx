@@ -11,7 +11,6 @@ import type { ExploreCardData } from "@/components/explore/EventCard";
 type Props = { events: Array<any> };
 
 export default function FavoriteEventsSection({ events }: Props) {
-  console.log("FavoriteEventsSection events prop:", events);
   const [cards, setCards] = useState<ExploreCardData[]>(
     () =>
       events.map((e: any) => ({

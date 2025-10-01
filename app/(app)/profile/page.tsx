@@ -94,7 +94,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="px-4 pt-6">
-      <div className="mx-auto w-full max-w-md space-y-8 pb-10">
+      <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
         {/* Header - moved to client component */}
         <ProfileHeader user={user} />
 

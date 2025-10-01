@@ -20,8 +20,6 @@ export default function FeaturedEventCard({
   onStarChange?: (id: string, next: boolean) => void;
   className?: string;
 }) {
-  // Add this temporarily in FeaturedEventCard to debug
-  console.log('Card data:', { starts_at: card.starts_at, ends_at: card.ends_at });
 
   const formatEventTimeRange = (startsAt: string, endsAt?: string | null) => {
     const startDate = new Date(startsAt);
