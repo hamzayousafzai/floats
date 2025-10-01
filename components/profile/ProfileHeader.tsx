@@ -84,7 +84,7 @@ export default function ProfileHeader({ user }: Props) {
         <div className="fixed inset-0 z-50 overflow-hidden">
           {/* Backdrop with fade-in animation */}
           <div 
-            className="absolute inset-0 bg-black bg-opacity-30 transition-opacity duration-300 ease-in-out"
+            className="absolute inset-0 bg-black/60 transition-opacity duration-300 ease-in-out"
             onClick={closeSettings}
           />
           
