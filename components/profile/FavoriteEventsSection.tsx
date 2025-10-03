@@ -25,6 +25,7 @@ export default function FavoriteEventsSection({ events }: Props) {
         categories: Array.isArray(e.categories) ? e.categories : [],
         is_starred: !!e.is_starred,
         series_id: e.series_id ?? null,
+        event_media: e.event_media ?? null, // Add this line
       }))
   );
 
@@ -43,6 +44,7 @@ export default function FavoriteEventsSection({ events }: Props) {
         categories: Array.isArray(e.categories) ? e.categories : [],
         is_starred: !!e.is_starred,
         series_id: e.series_id ?? null,
+        event_media: e.event_media ?? null, // And also add this line
       }))
     );
   }, [events]);

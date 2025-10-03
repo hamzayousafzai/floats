@@ -52,6 +52,8 @@ export default async function ProfilePage() {
     series_id: ev.series_id ?? null,
     categories: ev.categories ?? [],
     is_starred: true,
+    // Add event_media to the normalized object
+    event_media: ev.event_media ?? null,
   });
 
   let favoriteEvents: Array<{
@@ -62,6 +64,8 @@ export default async function ProfilePage() {
     ends_at: string | null;
     address: string | null;
     image_url: string | null;
+    // Add the event_media type here
+    event_media: { image_url: string; sort_index: number }[] | null;
     latitude: number | null;
     longitude: number | null;
     series_id: string | null;
@@ -74,7 +78,8 @@ export default async function ProfilePage() {
       .select(`
         id, title, description, starts_at, ends_at, address, image_url,
         latitude, longitude, series_id, vendor_id,
-        vendors!events_vendor_id_fkey ( id, name, slug )
+        vendors!events_vendor_id_fkey ( id, name, slug ),
+        event_media ( image_url, sort_index )
       `)
       .in("id", eventIds);
 
