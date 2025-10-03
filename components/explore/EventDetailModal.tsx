@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { type ExploreCardData } from "./EventCard";
-import { Calendar, MapPin, X, Download, Navigation, Share2 } from "lucide-react";
+import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
 import NotificationBell from "@/components/NotificationBell";
@@ -17,8 +17,21 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   const [starred, setStarred] = useState<boolean>(event?.is_starred ?? false);
   const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
   const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Memoize the sorted images array
+  const sortedImages = useMemo(() => {
+    if (!event?.event_media || event.event_media.length === 0) {
+      // Fallback to old image_url if event_media is not present
+      return event?.image_url ? [{ image_url: event.image_url, sort_index: 0 }] : [];
+    }
+    return [...event.event_media].sort((a, b) => a.sort_index - b.sort_index);
+  }, [event?.event_media, event?.image_url]);
 
   useEffect(() => {
+    // FIX: Reset the image index whenever the event changes.
+    setCurrentImageIndex(0);
+
     setStarred(event?.is_starred ?? false);
     let mounted = true;
     (async () => {
@@ -197,15 +210,48 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     }
   }, []);
 
+  const nextImage = () => {
+    setCurrentImageIndex((prevIndex) => (prevIndex + 1) % sortedImages.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prevIndex) => (prevIndex - 1 + sortedImages.length) % sortedImages.length);
+  };
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
         <div className="modal-box">
-          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"><X /></button>
+          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
 
-          {event.image_url && (
+          {sortedImages.length > 0 && (
             <figure className="relative h-48 -mx-6 -mt-6 mb-4 bg-gray-200 rounded-t-lg overflow-hidden">
-              <Image src={event.image_url} alt={event.title} fill className="object-cover" />
+              {/* Image Display */}
+              <Image 
+                src={sortedImages[currentImageIndex].image_url} 
+                alt={`${event.title} image ${currentImageIndex + 1}`} 
+                fill 
+                className="object-cover"
+                key={sortedImages[currentImageIndex].image_url}
+              />
+
+              {/* Carousel Controls Wrapper - Only show if there is more than one image */}
+              {sortedImages.length > 1 && (
+                <div className="absolute inset-0 z-10 flex items-center justify-between">
+                  <button 
+                    onClick={prevImage} 
+                    className="btn btn-ghost btn-circle btn-sm ml-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button 
+                    onClick={nextImage} 
+                    className="btn btn-ghost btn-circle btn-sm mr-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              )}
             </figure>
           )}
 

@@ -19,7 +19,8 @@ export async function POST(
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { coords, category_ids, ...eventData } = body;
+    // Separate event_media from the rest of the data
+    const { coords, category_ids, event_media, ...eventData } = body;
 
     if (eventData.vendor_id === "") {
       eventData.vendor_id = null;
@@ -37,38 +38,33 @@ export async function POST(
       }
     }
 
-    // Prepare the payload using the safe conversion utility
+    // Prepare the payload for the 'events' table.
+    // The primary image is the first one in the sorted array.
+    const primaryImage = event_media?.find((m: any) => m.sort_index === 0);
+    
     const updatePayload: any = {
       ...eventData,
       starts_at: convertToUTC(eventData.starts_at),
       ends_at: convertToUTC(eventData.ends_at),
+      image_url: primaryImage?.image_url ?? null, // Set the primary image_url on the events table
     };
 
     if (geomWkt) {
       updatePayload.geom = geomWkt;
     }
 
-    // Use the admin client for all database modifications
     const supabaseAdmin = createSupabaseAdmin();
 
-    // 1. Update the main event
-    const { error: eventUpdateError } = await supabaseAdmin
-      .from("events")
-      .update(updatePayload)
-      .eq("id", eventId);
+    // Transaction to update event and its media
+    const { error } = await supabaseAdmin.rpc('update_event_with_media', {
+      p_event_id: eventId,
+      p_event_data: updatePayload,
+      p_media_data: event_media || [],
+      p_category_ids: category_ids || []
+    });
 
-    if (eventUpdateError) throw new Error(`Event update failed: ${eventUpdateError.message}`);
-
-    // 2. Sync categories
-    await supabaseAdmin.from("event_categories").delete().eq("event_id", eventId);
-
-    if (category_ids && category_ids.length > 0) {
-      const newLinks = category_ids.map((catId: number) => ({
-        event_id: eventId,
-        category_id: catId,
-      }));
-      const { error: insertError } = await supabaseAdmin.from("event_categories").insert(newLinks);
-      if (insertError) throw new Error(`Failed to link new categories: ${insertError.message}`);
+    if (error) {
+      throw new Error(`Transaction failed: ${error.message}`);
     }
 
     return NextResponse.json({ ok: true });

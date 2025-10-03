@@ -19,6 +19,8 @@ export type ExploreCardData = {
   is_notified?: boolean;
   is_series_followed?: boolean;
   series_id?: string | null;
+  // Add this line to include the multiple images
+  event_media?: { image_url: string; sort_index: number }[] | null;
 };
 
 type Props = {
