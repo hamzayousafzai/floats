@@ -1,13 +1,13 @@
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { convertToUTC } from "@/lib/timezone"; // Import the new utility
+import { convertToUTC } from "@/lib/timezone";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
-  const eventId = (await params).id;
+  const eventId = await params.id;
 
   try {
     // Auth & Admin checks
@@ -19,43 +19,37 @@ export async function POST(
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    // Separate event_media from the rest of the data
-    const { coords, category_ids, event_media, ...eventData } = body;
-
-    if (eventData.vendor_id === "") {
-      eventData.vendor_id = null;
-    }
-
-    let geomWkt: string | undefined = undefined;
-    if (coords) {
-      const parts = coords.replace(/[()]/g, "").split(",").map((s: string) => s.trim());
-      if (parts.length === 2) {
-        const lat = parseFloat(parts[0]);
-        const lng = parseFloat(parts[1]);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          geomWkt = `SRID=4326;POINT(${lng} ${lat})`;
-        }
-      }
-    }
-
-    // Prepare the payload for the 'events' table.
-    // The primary image is the first one in the sorted array.
-    const primaryImage = event_media?.find((m: any) => m.sort_index === 0);
     
+    // Extract the specific parts we need
+    const { coords, category_ids, event_media } = body;
+
+    // Build ONLY the fields that belong in the events table
     const updatePayload: any = {
-      ...eventData,
-      starts_at: convertToUTC(eventData.starts_at),
-      ends_at: convertToUTC(eventData.ends_at),
-      image_url: primaryImage?.image_url ?? null, // Set the primary image_url on the events table
+      title: body.title,
+      description: body.description,
+      starts_at: convertToUTC(body.starts_at),
+      ends_at: convertToUTC(body.ends_at),
+      address: body.address,
+      is_market: body.is_market ?? false,
+      is_featured: body.is_featured ?? false,
+      status: body.status ?? 'confirmed',
+      vendor_id: body.vendor_id === "" ? null : body.vendor_id,
     };
 
-    if (geomWkt) {
-      updatePayload.geom = geomWkt;
+    // Set the primary image
+    const primaryImage = event_media?.find((m: any) => m.sort_index === 0);
+    updatePayload.image_url = primaryImage?.image_url ?? body.image_url ?? null;
+
+    // Add geometry if provided
+    if (coords) {
+      const [lng, lat] = coords.split(",").map(parseFloat);
+      if (!isNaN(lng) && !isNaN(lat)) {
+        updatePayload.geom = `POINT(${lng} ${lat})`;
+      }
     }
 
     const supabaseAdmin = createSupabaseAdmin();
 
-    // Transaction to update event and its media
     const { error } = await supabaseAdmin.rpc('update_event_with_media', {
       p_event_id: eventId,
       p_event_data: updatePayload,
@@ -64,11 +58,13 @@ export async function POST(
     });
 
     if (error) {
+      console.error("RPC error details:", error);
       throw new Error(`Transaction failed: ${error.message}`);
     }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("Update route error:", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
