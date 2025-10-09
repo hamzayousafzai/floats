@@ -4,6 +4,20 @@ import { useHost } from "@/lib/contexts/HostContext";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Building } from "lucide-react";
 
+// Helper to get a color for each role badge
+const getRoleBadgeClass = (role: string | undefined) => {
+  switch (role?.toLowerCase()) {
+    case 'owner':
+      return 'badge-primary';
+    case 'manager':
+      return 'badge-secondary';
+    case 'editor':
+      return 'badge-accent';
+    default:
+      return 'badge-ghost';
+  }
+};
+
 export default function SwitchViewButton() {
   const { userOrgs, setCurrentOrgById, loading } = useHost();
   const router = useRouter();
@@ -21,10 +35,8 @@ export default function SwitchViewButton() {
   };
 
   return (
-    // The dropdown wrapper should be full width to contain the button
     <div className="dropdown dropdown-end w-full">
-      {/* FIX: Add w-full and remove m-1 to make the button full width */}
-      <label tabIndex={0} className="btn btn-outline w-full">
+      <label tabIndex={0} className="btn btn-outline w-full m-1">
         <span>Switch View</span>
         <ChevronDown size={16} />
       </label>
@@ -33,8 +45,13 @@ export default function SwitchViewButton() {
         {userOrgs.map(org => (
           <li key={org.id}>
             <a onClick={() => handleSwitch(org.id)}>
-              <Building size={16} />
-              {org.name}
+              <div className="flex justify-between w-full items-center">
+                <span className="flex items-center gap-2">
+                  <Building size={16} />
+                  {org.name}
+                </span>
+                <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm`}>{org.role}</span>
+              </div>
             </a>
           </li>
         ))}
