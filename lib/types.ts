@@ -13,3 +13,11 @@ export type EventPin = {
 };
 
 export type WhenFilter = "now" | "today" | "weekend";
+
+export type OrgMember = {
+  id: string;
+  name: string;
+  slug: string;
+  role: 'owner' | 'manager' | 'editor' | 'admin';
+};
+

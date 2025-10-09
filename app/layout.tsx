@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import WelcomeBanner from "@/components/UI/WelcomeBanner";
+import { HostProvider } from "@/lib/contexts/HostContext"; // Import HostProvider
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,8 +18,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-theme="light">
       <body className={inter.className}>
-        {children}
-        <WelcomeBanner /> {/* Add the banner here */}
+        <HostProvider> {/* Wrap everything with the provider */}
+          {children}
+          <WelcomeBanner />
+        </HostProvider>
       </body>
     </html>
   );

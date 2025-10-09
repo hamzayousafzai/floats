@@ -6,6 +6,7 @@ import SignOutButton from "@/components/SignOutButton";
 import Link from "next/link";
 import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection";
 import ProfileHeader from "@/components/profile/ProfileHeader";
+import SwitchViewButton from "@/components/profile/SwitchViewButton";
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServer();
@@ -115,12 +116,17 @@ export default async function ProfilePage() {
           </div>
         </section>
 
+        <section className="space-y-4">
         {/* Admin Panel */}
         {isAdmin && (
           <section>
             <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
           </section>
         )}
+        <SwitchViewButton />
+        </section>
+
+        <div className="divider"></div>
 
         {/* Favorites */}
         {favoriteCount === 0 ? (
