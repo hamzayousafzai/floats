@@ -6,8 +6,9 @@ import { ChevronDown, Building } from "lucide-react";
 
 // Helper to get a color for each role badge
 const getRoleBadgeClass = (role: string | undefined) => {
+  // FIX: Use standardized role names
   switch (role?.toLowerCase()) {
-    case 'owner':
+    case 'hostowner':
       return 'badge-primary';
     case 'manager':
       return 'badge-secondary';
@@ -19,19 +20,17 @@ const getRoleBadgeClass = (role: string | undefined) => {
 };
 
 export default function SwitchViewButton() {
-  const { userOrgs, setCurrentOrgById, loading } = useHost();
+  // FIX: Use setCurrentOrgBySlug from the updated context
+  const { userOrgs, setCurrentOrgBySlug, loading } = useHost();
   const router = useRouter();
 
+  // This check is now reliable because userOrgs will be empty for non-members
   if (loading || userOrgs.length === 0) {
     return null;
   }
 
-  const handleSwitch = (orgId: string) => {
-    const org = userOrgs.find(o => o.id === orgId);
-    if (org) {
-      setCurrentOrgById(org.id);
-      router.push(`/host/${org.slug}`);
-    }
+  const handleSwitch = (slug: string) => {
+    setCurrentOrgBySlug(slug);
   };
 
   return (
@@ -44,7 +43,7 @@ export default function SwitchViewButton() {
         <li className="menu-title"><span>Your Organizations</span></li>
         {userOrgs.map(org => (
           <li key={org.id}>
-            <a onClick={() => handleSwitch(org.id)}>
+            <a onClick={() => handleSwitch(org.slug)}>
               <div className="flex justify-between w-full items-center">
                 <span className="flex items-center gap-2">
                   <Building size={16} />

@@ -6,8 +6,10 @@ import { User, Building, ChevronDown } from "lucide-react";
 
 // Helper to get a color for each role badge
 const getRoleBadgeClass = (role: string | undefined) => {
+  // FIX: Use standardized role names
   switch (role?.toLowerCase()) {
-    case 'owner':
+    case 'hostowner':
+    case 'admin':
       return 'badge-primary';
     case 'manager':
       return 'badge-secondary';
@@ -19,7 +21,8 @@ const getRoleBadgeClass = (role: string | undefined) => {
 };
 
 export default function ContextBar() {
-  const { userOrgs, currentOrg, setCurrentOrgById, loading } = useHost();
+  // FIX: Use setCurrentOrgBySlug from the context
+  const { userOrgs, currentOrg, setCurrentOrgBySlug, loading } = useHost();
   const router = useRouter();
 
   // Don't render if loading or if the user has no organizations to switch between.
@@ -27,16 +30,9 @@ export default function ContextBar() {
     return null;
   }
 
-  const handleSwitch = (orgId: string | null) => {
-    setCurrentOrgById(orgId);
-    if (orgId) {
-      const org = userOrgs.find(o => o.id === orgId);
-      if (org) {
-        router.push(`/host/${org.slug}`);
-      }
-    } else {
-      router.push('/profile');
-    }
+  // FIX: The handleSwitch function now uses the slug
+  const handleSwitch = (slug: string | null) => {
+    setCurrentOrgBySlug(slug);
   };
 
   const currentViewName = currentOrg ? currentOrg.name : "Personal";
@@ -56,11 +52,11 @@ export default function ContextBar() {
           </label>
 
           {/* This is the dropdown content, inspired by your Figma design */}
-          {/* FIX: Increased width from w-64 to w-80 */}
           <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-80 mt-2">
             <li className="menu-title"><span>Switch View</span></li>
             {/* Personal View Option */}
             <li>
+              {/* FIX: Pass null to handleSwitch for personal view */}
               <a onClick={() => handleSwitch(null)} className={!currentOrg ? 'active' : ''}>
                 <User size={16} />
                 Personal
@@ -72,16 +68,13 @@ export default function ContextBar() {
             {/* Organization View Options */}
             {userOrgs.map(org => (
               <li key={org.id}>
-                <a onClick={() => handleSwitch(org.id)} className={currentOrg?.id === org.id ? 'active' : ''}>
-                  {/* FIX: Add gap and prevent text wrapping issues */}
+                {/* FIX: Pass the org's slug to handleSwitch */}
+                <a onClick={() => handleSwitch(org.slug)} className={currentOrg?.id === org.id ? 'active' : ''}>
                   <div className="flex justify-between w-full items-center gap-2">
-                    {/* Add min-w-0 to allow truncation */}
                     <span className="flex items-center gap-2 min-w-0">
                       <Building size={16} className="flex-shrink-0" />
-                      {/* Add truncate class to the name */}
                       <span className="truncate">{org.name}</span>
                     </span>
-                    {/* Prevent badge from shrinking */}
                     <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm flex-shrink-0`}>{org.role}</span>
                   </div>
                 </a>

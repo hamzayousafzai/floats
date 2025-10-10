@@ -3,13 +3,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { OrgMember } from '@/lib/types';
+import { usePathname, useRouter } from 'next/navigation';
 
-interface HostContextType {
+export interface HostContextType {
   userOrgs: OrgMember[];
   currentOrg: OrgMember | null;
-  setCurrentOrgById: (orgId: string | null) => void;
+  role: OrgMember['role'] | null;
   setCurrentOrgBySlug: (slug: string | null) => void;
   loading: boolean;
+  isGlobalAdmin: boolean;
 }
 
 const HostContext = createContext<HostContextType | undefined>(undefined);
@@ -17,112 +19,74 @@ const HostContext = createContext<HostContextType | undefined>(undefined);
 export function HostProvider({ children }: { children: ReactNode }) {
   const [userOrgs, setUserOrgs] = useState<OrgMember[]>([]);
   const [currentOrg, setCurrentOrg] = useState<OrgMember | null>(null);
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
 
-    const fetchUserOrgs = async () => {
-      console.log("--- STARTING ORG FETCH ---");
+    const fetchAndSetContext = async () => {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.log("DEBUG: No user found. Aborting.");
+        setUserOrgs([]);
+        setCurrentOrg(null);
+        setIsGlobalAdmin(false);
         setLoading(false);
         return;
       }
-      console.log(`DEBUG: User found. ID: ${user.id}`);
 
-      // 1. Check for admin status
-      console.log("DEBUG: Step 1 - Checking admin status from 'app_admins' table...");
-      const { data: adminRecord, error: adminError } = await supabase
-        .from('app_admins')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .single();
+      const { data: adminRecord } = await supabase.from('app_admins').select('user_id').eq('user_id', user.id).single();
+      const isAdmin = !!adminRecord;
+      setIsGlobalAdmin(isAdmin);
       
-      if (adminError && adminError.code !== 'PGRST116') { // PGRST116 = "exact one row not found", which is okay
-        console.error("DEBUG: Error checking admin status:", adminError);
-      }
-      
-      const isGlobalAdmin = !!adminRecord;
-      console.log(`DEBUG: Is user a global admin? ${isGlobalAdmin}`);
-      
-      let orgsData: OrgMember[] = [];
-
-      if (isGlobalAdmin) {
-        // 2. If admin, fetch ALL organizations
-        console.log("DEBUG: Step 2 - User is admin. Fetching all orgs from 'orgs' table...");
-        const { data, error } = await supabase.from('orgs').select('id, name, slug');
-        
-        if (error) {
-          // THIS IS THE ERROR YOU ARE SEEING
-          console.error("Admin failed to fetch all orgs:", error);
-        } else {
-          console.log("DEBUG: Successfully fetched all orgs for admin. Count:", data?.length);
-          orgsData = (data || []).map(org => ({
-            ...org,
-            role: 'admin' as const
-          }));
-        }
+      let fetchedOrgs: OrgMember[] = [];
+      if (isAdmin) {
+        const { data } = await supabase.from('orgs').select('id, name, slug');
+        fetchedOrgs = (data || []).map(org => ({ ...org, role: 'admin' as const }));
       } else {
-        // 3. If not admin, fetch member organizations
-        console.log("DEBUG: Step 2 - User is not admin. Fetching from 'org_members'...");
-        const { data, error } = await supabase
-          .from('org_members')
-          .select('role, orgs(id, name, slug)')
-          .eq('user_id', user.id);
-        
-        if (error) {
-          console.error("Failed to fetch user organizations:", error);
-        } else {
-          orgsData = (data || []).map(member => ({
+        const { data } = await supabase.from('org_members').select('role, orgs(id, name, slug)');
+        fetchedOrgs = (data || [])
+          .filter(member => member.orgs)
+          .map(member => ({
+            id: member.orgs!.id,
+            name: member.orgs!.name,
+            slug: member.orgs!.slug,
             role: member.role,
-            ...(member.orgs as { id: string; name: string; slug: string; })
           }));
-        }
       }
-      
-      setUserOrgs(orgsData);
+      setUserOrgs(fetchedOrgs);
 
-      // Restore last selected org from localStorage
-      const lastOrgId = localStorage.getItem('currentOrgId');
-      const orgToSet = orgsData.find(org => org.id === lastOrgId) || null;
-      setCurrentOrg(orgToSet);
+      // This is now the single source of truth for setting the current org
+      const slugFromPath = pathname.startsWith('/host/') ? pathname.split('/')[2] : null;
+      const orgFromPath = fetchedOrgs.find(org => org.slug === slugFromPath) || null;
+      
+      setCurrentOrg(orgFromPath);
+      if (orgFromPath) {
+        localStorage.setItem('currentOrgId', orgFromPath.id);
+      } else {
+        localStorage.removeItem('currentOrgId');
+      }
 
       setLoading(false);
-      console.log("--- FINISHED ORG FETCH ---");
     };
 
-    fetchUserOrgs();
-  }, []);
+    fetchAndSetContext();
+  }, [pathname]); // The effect correctly depends only on the URL path
 
-  const setCurrentOrgById = (orgId: string | null) => {
-    if (orgId === null) {
-      localStorage.removeItem('currentOrgId');
-      setCurrentOrg(null);
-    } else {
-      const orgToSet = userOrgs.find(org => org.id === orgId) || null;
-      if (orgToSet) {
-        localStorage.setItem('currentOrgId', orgId);
-        setCurrentOrg(orgToSet);
-      }
-    }
-  };
-
+  // FIX: Simplify the function to only handle navigation.
   const setCurrentOrgBySlug = (slug: string | null) => {
-    if (slug === null) {
-      localStorage.removeItem('currentOrgId');
-      setCurrentOrg(null);
+    if (slug) {
+      router.push(`/host/${slug}`);
     } else {
-      const orgToSet = userOrgs.find(org => org.slug === slug) || null;
-      if (orgToSet) {
-        localStorage.setItem('currentOrgId', orgToSet.id);
-        setCurrentOrg(orgToSet);
-      }
+      router.push('/profile');
     }
   };
 
-  const value = { userOrgs, currentOrg, setCurrentOrgById, setCurrentOrgBySlug, loading };
+  const role = currentOrg?.role || null;
+  const value = { userOrgs, currentOrg, role, setCurrentOrgBySlug, loading, isGlobalAdmin };
 
   return <HostContext.Provider value={value}>{children}</HostContext.Provider>;
 }

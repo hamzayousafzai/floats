@@ -31,13 +31,17 @@ const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | n
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type MediaRow = Database["public"]["Tables"]["event_media"]["Row"];
-type Category = { id: number; name: string; };
+// FIX: Change category id type to string to match parent pages
+type Category = { id: string; name: string; };
 
+// --- MODIFIED: Add role to Props ---
 type Props = {
-  // MODIFIED: The event prop now includes the event_media array
-  event: EventRow & { event_media: MediaRow[] | null };
+  event?: EventRow & { event_media: MediaRow[] | null };
+  orgId?: string;
   allCategories: Category[];
-  currentCategoryIds: Set<number>;
+  // FIX: Change currentCategoryIds to expect a Set of strings
+  currentCategoryIds?: Set<string>;
+  role?: Database['public']['Enums']['org_role'] | 'admin' | null; // Add role prop
 };
 
 // Define a new type for the media items in the form state
@@ -54,20 +58,22 @@ type FormState = {
   starts_at: string;
   ends_at: string;
   address: string;
+  event_media: MediaItem[];
   is_market: boolean;
   is_featured: boolean;
-  category_ids: Set<number>;
-  vendor_id: string;
+  // FIX: Change category_ids to be a Set of strings
+  category_ids: Set<string>;
+  vendor_id: string | null;
   status: string;
   coords: string;
-  event_media: MediaItem[]; // Use this instead of image_url
 };
 
 const TZ = "America/New_York";
 
-export default function EditEventForm({ event, allCategories, currentCategoryIds }: Props) {
+export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const isEditing = !!event; // Determine if we are in "edit" or "create" mode
 
   // --- Cropper State ---
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -93,38 +99,39 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
     }
   };
 
-  // Initialize form with non-null defaults
+  // --- MODIFIED: Initialize form based on whether it's a new or existing event ---
   const initialForm: FormState = {
-    title: event.title ?? "",
-    description: event.description ?? "",
-    starts_at: toInputDatetime(event.starts_at),
-    ends_at: toInputDatetime(event.ends_at),
-    address: event.address ?? "",
-    // Convert event_media from props to the form state shape
-    // This line will now work correctly
-    event_media: (event.event_media || (event.image_url ? [{ image_url: event.image_url, sort_index: 0 }] : [])).sort((a,b) => a.sort_index - b.sort_index),
-    is_market: (event.is_market ?? false) as boolean,
-    is_featured: (event.is_featured ?? false) as boolean,
+    title: event?.title ?? "",
+    description: event?.description ?? "",
+    starts_at: toInputDatetime(event?.starts_at),
+    ends_at: toInputDatetime(event?.ends_at),
+    address: event?.address ?? "",
+    event_media: (event?.event_media || (event?.image_url ? [{ image_url: event.image_url, sort_index: 0 }] : []))
+      .sort((a: { sort_index: number }, b: { sort_index: number }) => a.sort_index - b.sort_index),
+    is_market: (event?.is_market ?? false) as boolean,
+    is_featured: (event?.is_featured ?? false) as boolean,
+    // FIX: Initialize with a Set of strings
     category_ids: new Set(currentCategoryIds ?? []),
-    vendor_id: event.vendor_id ?? "",
-    status: (event.status ?? "confirmed") as string,
+    vendor_id: event?.vendor_id ?? "",
+    status: (event?.status ?? "confirmed") as string,
     coords: "",
   };
 
   const [form, setForm] = useState<FormState>(initialForm);
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
+    setForm((prev) => ({ ...prev, [k]: v }));
   }
 
-  function handleCategoryChange(categoryId: number, isChecked: boolean) {
+  // FIX: Handle categoryId as a string
+  function handleCategoryChange(categoryId: string, isChecked: boolean) {
     const newCategoryIds = new Set(form.category_ids);
     if (isChecked) {
       newCategoryIds.add(categoryId);
     } else {
       newCategoryIds.delete(categoryId);
     }
-    update("category_ids", newCategoryIds);
+    update('category_ids', newCategoryIds);
   }
 
   // --- Updated Image Handling ---
@@ -180,18 +187,38 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
         return media; // This is an existing image
       }));
 
-      const body = { ...form, event_media: uploadedMedia, category_ids: Array.from(form.category_ids) };
+      // --- MODIFIED: Handle dynamic orgId and API endpoint ---
+      const finalOrgId = event?.org_id || orgId;
+      if (!finalOrgId) {
+        throw new Error("Organization ID is missing. Cannot submit form.");
+      }
 
-      const res = await fetch(`/admin/events/${event.id}/update`, {
+      const body = { ...form, org_id: finalOrgId, event_media: uploadedMedia, category_ids: Array.from(form.category_ids) };
+
+      const apiEndpoint = isEditing
+        ? `/admin/events/${event.id}/update`
+        : '/admin/events/new/submit';
+
+      const res = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to update event");
+      if (!res.ok) throw new Error(data.error || `Failed to ${isEditing ? 'update' : 'create'} event`);
       
-      alert("Event updated successfully!");
-      router.push("/admin/events");
+      alert(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
+      
+      // --- MODIFIED: Redirect based on context ---
+      if (isEditing) {
+        router.push("/admin/events");
+      } else {
+        // For new events, we don't have the slug, so a refresh is a safe bet
+        // to show the new event in the host's list.
+        router.refresh();
+        // A more specific redirect could be router.back() or to a known path
+      }
+
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -313,29 +340,22 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
         </div>
 
         {/* Checkboxes */}
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={form.is_market}
-              onChange={(e) => update("is_market", e.target.checked)}
-              className="checkbox"
-            />
-            <span className="text-sm">Is Market Event</span>
+        <div className="flex flex-col space-y-2">
+          <label className="flex items-center space-x-2 cursor-pointer">
+            <input type="checkbox" className="checkbox" checked={form.is_market} onChange={(e) => update("is_market", e.target.checked)} />
+            <span>Is Market Event</span>
           </label>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={form.is_featured}
-              onChange={(e) => update("is_featured", e.target.checked)}
-              className="checkbox"
-            />
-            <span className="text-sm">Featured Event</span>
-          </label>
+          {/* FIX: Conditionally render "Featured Event" checkbox for admins */}
+          {role === 'admin' && (
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" className="checkbox" checked={form.is_featured} onChange={(e) => update("is_featured", e.target.checked)} />
+              <span>Featured Event</span>
+            </label>
+          )}
         </div>
 
         {/* Categories */}
-        <div>
+        <div className="form-control">
           <label className="block text-sm font-medium mb-1">Categories</label>
           <div className="space-y-1">
             {allCategories.map((cat) => (
@@ -367,14 +387,14 @@ export default function EditEventForm({ event, allCategories, currentCategoryIds
           </select>
         </div>
 
-        {/* Submit Button */}
+        {/* --- MODIFIED: Submit Button Text --- */}
         <div className="pt-4">
           <button
             type="submit"
             disabled={saving}
             className="btn btn-primary w-full"
           >
-            {saving ? "Updating..." : "Update Event"}
+            {saving ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Event" : "Create Event")}
           </button>
         </div>
       </form>

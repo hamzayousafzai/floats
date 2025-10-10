@@ -1,3 +1,5 @@
+import { Database } from "./database.types";
+
 export type EventPin = {
   id: string;
   vendorSlug: string;
@@ -14,10 +16,12 @@ export type EventPin = {
 
 export type WhenFilter = "now" | "today" | "weekend";
 
+// This is a custom type that combines org data with membership data.
 export type OrgMember = {
   id: string;
   name: string;
   slug: string;
-  role: 'owner' | 'manager' | 'editor' | 'admin';
+  // FIX: Use the generated Enum type from database.types.ts
+  role: Database['public']['Enums']['org_role'] | 'admin';
 };
 
