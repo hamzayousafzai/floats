@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-// FIX: Import useSearchParams to read URL parameters on the client side
 import { useRouter, useSearchParams } from "next/navigation";
+import LoginForm from "@/components/auth/LoginForm";
+
+// A simple loading component to show while the main component loads on the client
+function Loading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <span className="loading loading-spinner loading-lg"></span>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const supabase = createBrowserClient(
@@ -11,7 +20,6 @@ export default function LoginPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const router = useRouter();
-  // FIX: Get access to the URL's search parameters
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState<"request" | "verify">("request");
@@ -98,95 +106,99 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
-      <div className="w-full max-w-md border bg-white rounded-xl p-6 space-y-6 shadow-sm">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Join Floats
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Discover local markets and pop-ups in Charlotte. Save your favorites, set reminders, and never miss out.
+    // Suspense tells Next.js to show the 'fallback' UI on the server,
+    // and then render the LoginForm on the client.
+    <Suspense fallback={<Loading />}>
+      <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
+        <div className="w-full max-w-md border bg-white rounded-xl p-6 space-y-6 shadow-sm">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-800">
+              Join Floats
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Discover local markets and pop-ups in Charlotte. Save your favorites, set reminders, and never miss out.
+            </p>
+          </div>
+
+          {step === "request" && (
+            <form onSubmit={requestCode} className="space-y-4">
+              <label className="block text-sm">
+                Enter your email
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                />
+              </label>
+              <button
+                type="submit"
+                className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
+                disabled={!email || sent}
+              >
+                {sent ? "Code sent ✓" : "Send code"}
+              </button>
+            </form>
+          )}
+
+          {step === "verify" && (
+            <form onSubmit={verifyCode} className="space-y-4">
+              <div className="text-sm text-gray-600 text-center">
+                We sent a 6‑digit code to
+                <span className="font-medium"> {email}</span>
+              </div>
+              <label className="block text-sm">
+                Verification Code
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) =>
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  className="mt-1 tracking-widest text-center text-lg font-medium w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="••••••"
+                />
+              </label>
+              <button
+                type="submit"
+                className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
+                disabled={code.length !== 6 || verifying}
+              >
+                {verifying ? "Verifying..." : "Verify & Sign In"}
+              </button>
+              <div className="flex justify-between text-xs text-gray-500">
+                <button
+                  type="button"
+                  onClick={() => setStep("request")}
+                  className="underline hover:text-black"
+                >
+                  Change email
+                </button>
+                <button
+                  type="button"
+                  onClick={resend}
+                  disabled={resending}
+                  className="underline hover:text-black disabled:opacity-50"
+                >
+                  {resending ? "Resending..." : "Resend code"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
+          <p className="text-xs text-gray-500 text-center">
+            Enter your email to receive a one‑time code. No password required.
           </p>
         </div>
-
-        {step === "request" && (
-          <form onSubmit={requestCode} className="space-y-4">
-            <label className="block text-sm">
-              Enter your email
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
-            </label>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
-              disabled={!email || sent}
-            >
-              {sent ? "Code sent ✓" : "Send code"}
-            </button>
-          </form>
-        )}
-
-        {step === "verify" && (
-          <form onSubmit={verifyCode} className="space-y-4">
-            <div className="text-sm text-gray-600 text-center">
-              We sent a 6‑digit code to
-              <span className="font-medium"> {email}</span>
-            </div>
-            <label className="block text-sm">
-              Verification Code
-              <input
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                className="mt-1 tracking-widest text-center text-lg font-medium w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="••••••"
-              />
-            </label>
-            <button
-              type="submit"
-              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
-              disabled={code.length !== 6 || verifying}
-            >
-              {verifying ? "Verifying..." : "Verify & Sign In"}
-            </button>
-            <div className="flex justify-between text-xs text-gray-500">
-              <button
-                type="button"
-                onClick={() => setStep("request")}
-                className="underline hover:text-black"
-              >
-                Change email
-              </button>
-              <button
-                type="button"
-                onClick={resend}
-                disabled={resending}
-                className="underline hover:text-black disabled:opacity-50"
-              >
-                {resending ? "Resending..." : "Resend code"}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-
-        <p className="text-xs text-gray-500 text-center">
-          Enter your email to receive a one‑time code. No password required.
-        </p>
-      </div>
-    </main>
+      </main>
+    </Suspense>
   );
 }
