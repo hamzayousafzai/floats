@@ -1,29 +1,19 @@
-import Link from "next/link";
-import { Map, Compass, User } from "lucide-react";
+// FIX: This layout uses hooks, so it must be a client component.
+"use client";
+
+// FIX: Import the BottomNav component
+import BottomNav from "@/components/nav/BottomNav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen flex flex-col">
-      {/* Page content will fill the available space */}
-      <main className="flex-1 overflow-hidden">
+      {/* FIX: Adjust main content area to prevent overlap with the new nav bar */}
+      <main className="flex-1 overflow-y-auto pb-20">
         {children}
       </main>
 
-      {/* DaisyUI Dock for main navigation */}
-      <div className="dock dock-bottom dock-center z-50">
-        <Link href="/map" className="dock-item">
-          <span className="text-xl"><Map /></span>
-          <span className="dock-label">Map</span>
-        </Link>
-        <Link href="/explore" className="dock-item">
-          <span className="text-xl"><Compass /></span>
-          <span className="dock-label">Explore</span>
-        </Link>
-        <Link href="/profile" className="dock-item">
-          <span className="text-xl"><User /></span>
-          <span className="dock-label">Profile</span>
-        </Link>
-      </div>
+      {/* FIX: Replace the old DaisyUI dock with the BottomNav component */}
+      <BottomNav />
     </div>
   );
 }

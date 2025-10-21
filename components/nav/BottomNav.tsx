@@ -45,7 +45,7 @@ export default function BottomNav() {
 										/>
 									)}
 									<Icon
-										size={36}
+										size={28}
 										className={`relative mb-0.5 transition-colors ${
 											active ? "text-black" : "text-gray-500 group-hover:text-gray-700"
 										}`}
