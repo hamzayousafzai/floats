@@ -38,6 +38,9 @@ export function HostProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // This call is correct. It will now invoke the new, secure function.
+      await supabase.rpc('accept_invites');
+
       const { data: adminRecord } = await supabase.from('app_admins').select('user_id').eq('user_id', user.id).single();
       const isAdmin = !!adminRecord;
       setIsGlobalAdmin(isAdmin);
@@ -47,14 +50,23 @@ export function HostProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.from('orgs').select('id, name, slug');
         fetchedOrgs = (data || []).map(org => ({ ...org, role: 'admin' as const }));
       } else {
-        const { data } = await supabase.from('org_members').select('role, orgs(id, name, slug)');
+        // Query the new, authoritative view to get all user orgs and roles
+        const { data } = await supabase
+          .from('user_org_roles')
+          .select('org_id, name, slug, role')
+          .eq('user_id', user.id);
+        
+        // FIX: You MUST add .filter() here to remove nulls before mapping.
+        // This resolves the TypeScript error by ensuring all data matches the OrgMember type.
         fetchedOrgs = (data || [])
-          .filter(member => member.orgs)
-          .map(member => ({
-            id: member.orgs!.id,
-            name: member.orgs!.name,
-            slug: member.orgs!.slug,
-            role: member.role,
+          .filter((org): org is { org_id: string; name: string; slug: string; role: any } => 
+            org.org_id !== null && org.name !== null && org.slug !== null && org.role !== null
+          )
+          .map(org => ({
+            id: org.org_id,
+            name: org.name,
+            slug: org.slug,
+            role: org.role,
           }));
       }
       setUserOrgs(fetchedOrgs);

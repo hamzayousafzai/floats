@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { useRouter } from "next/navigation";
+// FIX: Import useSearchParams to read URL parameters on the client side
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const supabase = createBrowserClient(
@@ -10,6 +11,8 @@ export default function LoginPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
   const router = useRouter();
+  // FIX: Get access to the URL's search parameters
+  const searchParams = useSearchParams();
 
   const [step, setStep] = useState<"request" | "verify">("request");
   const [email, setEmail] = useState("");
@@ -64,7 +67,9 @@ export default function LoginPage() {
       }
       if (vErr) throw vErr;
       if (data?.session) {
-        router.replace("/profile");
+        // FIX: Check for a 'next' URL parameter and redirect there, otherwise go to /profile
+        const nextUrl = searchParams.get('next');
+        router.replace(nextUrl || "/profile");
       } else {
         setError("Invalid or expired code.");
       }

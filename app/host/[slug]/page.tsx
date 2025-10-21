@@ -38,9 +38,9 @@ export default function HostEventsPage() {
 
   const isLoading = hostLoading || loadingEvents;
 
-  // FIX: Add 'admin' to permission checks
-  const canCreateEvents = role === 'HostOwner' || role === 'Manager' || role === 'admin';
-  const canEditEvents = role === 'HostOwner' || role === 'Manager' || role === 'Editor' || role === 'admin';
+  // FIX: Use correct lowercase roles from the useHost context.
+  const canCreateEvents = role === 'owner' || role === 'manager' || role === 'admin';
+  const canEditEvents = role === 'owner' || role === 'manager' || role === 'editor' || role === 'admin';
 
   return (
     <div className="bg-gray-50 min-h-full">

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "Discover local markets, pop-ups, and events near you.",
   // This helps iOS safe areas and mobile viewport
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
-  themeColor: "#ffffff",
+  themeColor: "#ffffffff",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
