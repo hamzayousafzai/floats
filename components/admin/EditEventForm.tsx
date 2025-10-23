@@ -6,6 +6,9 @@ import Image from "next/image";
 import type { Database } from "@/lib/database.types";
 import { toZonedTime, format } from "date-fns-tz";
 import Cropper, { type Area } from "react-easy-crop";
+import { Plus, Trash2 } from "lucide-react";
+import { useHost } from "@/lib/contexts/HostContext";
+import { createPortal } from "react-dom";  // ADD
 
 // Helper function to create a cropped image blob (moved here for component use)
 const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | null> => {
@@ -55,8 +58,8 @@ type MediaItem = {
 type FormState = {
   title: string;
   description: string;
-  starts_at: string;
-  ends_at: string;
+  // FIX: This will now hold one or more date pairs for creation
+  dates: { starts_at: string; ends_at: string }[];
   address: string;
   event_media: MediaItem[];
   is_market: boolean;
@@ -72,8 +75,53 @@ const TZ = "America/New_York";
 
 export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role }: Props) {
   const router = useRouter();
+  const isEditing = !!event;
+
+  // FIX: derive org info from Host context (used for submit + redirect)
+  const { currentOrg } = useHost();
+  const hostOrgId = currentOrg?.id ?? null;
+  const orgSlug = currentOrg?.slug ?? "";
+
+  // MOVE this helper above initialForm so it’s defined before use
+  const toInputDatetime = (v: string | null | undefined) => {
+    if (!v) return "";
+    try {
+      const zoned = toZonedTime(v, TZ);
+      return format(zoned, "yyyy-MM-dd'T'HH:mm");
+    } catch (error) {
+      console.error("Error formatting date:", v, error);
+      return "";
+    }
+  };
+
+  const initialForm: FormState = {
+    title: event?.title ?? "",
+    description: event?.description ?? "",
+    // FIX: Initialize dates array. If editing, use the event's date. If new, start with one empty entry.
+    dates: isEditing && event
+      ? [{ starts_at: toInputDatetime(event.starts_at), ends_at: toInputDatetime(event.ends_at) }]
+      : [{ starts_at: "", ends_at: "" }],
+    address: event?.address ?? "",
+    // FIX: Initialize event_media. Map existing media or default to an empty array.
+    event_media: event?.event_media?.map(media => ({
+      id: media.id,
+      image_url: media.image_url,
+      sort_index: media.sort_index,
+    })) ?? [],
+    is_market: (event?.is_market ?? false) as boolean,
+    is_featured: (event?.is_featured ?? false) as boolean,
+    category_ids: new Set(currentCategoryIds ?? []),
+    vendor_id: event?.vendor_id ?? "",
+    // FIX: Default new events to 'draft' status.
+    status: (event?.status ?? "draft") as string,
+    coords: "",
+  };
+
+  const [form, setForm] = useState<FormState>(initialForm);
+  // FIX: Add state for the recurring checkbox, only relevant for new events
+  const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
-  const isEditing = !!event; // Determine if we are in "edit" or "create" mode
+  const [uploading, setUploading] = useState(false);
 
   // --- Cropper State ---
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -87,43 +135,29 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   }, []);
   // --- End Cropper State ---
 
-  // Helper to convert UTC datetime string to NY wall-time for input
-  const toInputDatetime = (v: string | null | undefined) => {
-    if (!v) return "";
-    try {
-      const zoned = toZonedTime(v, TZ); // take stored UTC and view it in NY wall time
-      return format(zoned, "yyyy-MM-dd'T'HH:mm"); // format for datetime-local input
-    } catch (error) {
-      console.error("Error formatting date:", v, error);
-      return ""; // Fallback on error
-    }
-  };
-
-  // --- MODIFIED: Initialize form based on whether it's a new or existing event ---
-  const initialForm: FormState = {
-    title: event?.title ?? "",
-    description: event?.description ?? "",
-    starts_at: toInputDatetime(event?.starts_at),
-    ends_at: toInputDatetime(event?.ends_at),
-    address: event?.address ?? "",
-    event_media: (event?.event_media || (event?.image_url ? [{ image_url: event.image_url, sort_index: 0 }] : []))
-      .sort((a: { sort_index: number }, b: { sort_index: number }) => a.sort_index - b.sort_index),
-    is_market: (event?.is_market ?? false) as boolean,
-    is_featured: (event?.is_featured ?? false) as boolean,
-    // FIX: Initialize with a Set of strings
-    category_ids: new Set(currentCategoryIds ?? []),
-    vendor_id: event?.vendor_id ?? "",
-    status: (event?.status ?? "confirmed") as string,
-    coords: "",
-  };
-
-  const [form, setForm] = useState<FormState>(initialForm);
-
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((prev) => ({ ...prev, [k]: v }));
   }
 
-  // FIX: Handle categoryId as a string
+  // --- FIX: Add functions to manage the dates array ---
+  function handleDateChange(index: number, field: 'starts_at' | 'ends_at', value: string) {
+    const newDates = [...form.dates];
+    newDates[index][field] = value;
+    update('dates', newDates);
+  }
+
+  function addDate() {
+    update('dates', [...form.dates, { starts_at: "", ends_at: "" }]);
+  }
+
+  function removeDate(index: number) {
+    if (form.dates.length > 1) {
+      const newDates = form.dates.filter((_, i) => i !== index);
+      update('dates', newDates);
+    }
+  }
+  // --- End Date Management ---
+
   function handleCategoryChange(categoryId: string, isChecked: boolean) {
     const newCategoryIds = new Set(form.category_ids);
     if (isChecked) {
@@ -188,36 +222,58 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       }));
 
       // --- MODIFIED: Handle dynamic orgId and API endpoint ---
-      const finalOrgId = event?.org_id || orgId;
-      if (!finalOrgId) {
-        throw new Error("Organization ID is missing. Cannot submit form.");
+      // Use hostOrgId first, then fall back to prop orgId
+      const finalOrgId = event?.org_id || hostOrgId || orgId;
+      if (!finalOrgId) throw new Error("Organization ID is missing.");
+
+      let apiEndpoint: string;
+      let body: any;
+
+      if (isEditing) {
+        // --- UPDATE LOGIC (Single Event) ---
+        apiEndpoint = `/admin/events/${event.id}/update`;
+        body = {
+          ...form,
+          starts_at: form.dates[0].starts_at,
+          ends_at: form.dates[0].ends_at,
+          org_id: finalOrgId,
+          event_media: uploadedMedia,
+          category_ids: Array.from(form.category_ids),
+          dates: undefined, // Clean up payload
+        };
+      } else {
+        // --- CREATE LOGIC (Single or Recurring) ---
+        apiEndpoint = '/admin/events/new/submit';
+        body = {
+          org_id: finalOrgId,
+          is_recurring: isRecurring,
+          events: (isRecurring ? form.dates : [form.dates[0]]).map(d => ({
+            title: form.title,
+            description: form.description,
+            starts_at: d.starts_at,
+            ends_at: d.ends_at,
+            address: form.address,
+            is_market: form.is_market,
+            is_featured: form.is_featured,
+            status: form.status,
+          })),
+          event_media: uploadedMedia,
+          category_ids: Array.from(form.category_ids),
+        };
       }
-
-      const body = { ...form, org_id: finalOrgId, event_media: uploadedMedia, category_ids: Array.from(form.category_ids) };
-
-      const apiEndpoint = isEditing
-        ? `/admin/events/${event.id}/update`
-        : '/admin/events/new/submit';
 
       const res = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Failed to ${isEditing ? 'update' : 'create'} event`);
-      
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Submission failed");
+
       alert(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      
-      // --- MODIFIED: Redirect based on context ---
-      if (isEditing) {
-        router.push("/admin/events");
-      } else {
-        // For new events, we don't have the slug, so a refresh is a safe bet
-        // to show the new event in the host's list.
-        router.refresh();
-        // A more specific redirect could be router.back() or to a known path
-      }
+      router.push(`/host/${orgSlug}`);
+      router.refresh();
 
     } catch (err: any) {
       alert(`Error: ${err.message}`);
@@ -226,28 +282,51 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     }
   }
 
+  // --- Role-based permissions ---
+  const canPublish = role === 'admin' || role === 'owner';
+  const canArchive = role === 'admin' || role === 'owner';
+  // An editor can only edit, not change status from draft/published.
+  const canChangeStatus = role !== 'editor';
+
   return (
     <>
       {/* Cropper Modal */}
-      {imageToCrop && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex flex-col p-4">
-          <div className="relative flex-grow">
-            <Cropper
-              image={imageToCrop}
-              crop={crop}
-              zoom={zoom}
-              aspect={aspect}
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={onCropComplete}
-            />
-          </div>
-          <div className="flex-shrink-0 pt-4 flex justify-end gap-2">
-            <button onClick={() => setImageToCrop(null)} className="btn btn-ghost">Cancel</button>
-            <button onClick={handleSaveCrop} className="btn btn-primary">Save Crop</button>
-          </div>
-        </div>
-      )}
+      {imageToCrop && typeof window !== "undefined" &&
+        createPortal(
+          (
+            <div className="fixed inset-0 bg-black z-[99999] flex flex-col p-4">
+              <div className="relative flex-grow">
+                <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={aspect}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                />
+              </div>
+              <div className="flex-shrink-0 pt-4 flex justify-end gap-2">
+                <button
+                  type="button"                        // ADD
+                  onClick={() => setImageToCrop(null)}
+                  className="btn btn-ghost"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"                        // ADD
+                  onClick={handleSaveCrop}
+                  className="btn btn-primary"
+                >
+                  Save Crop
+                </button>
+              </div>
+            </div>
+          ),
+          document.body
+        )
+      }
 
       <form onSubmit={submit} className="space-y-4">
         {/* Title */}
@@ -304,28 +383,54 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
           )}
         </div>
 
-        {/* Date/Time Fields */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Starts At</label>
-            <input
-              type="datetime-local"
-              value={form.starts_at}
-              onChange={(e) => update("starts_at", e.target.value)}
-              className="input input-bordered w-full"
-              required
-            />
+        {/* --- RECURRING & DATE FIELDS --- */}
+        {!isEditing && (
+          <div className="form-control">
+            <label className="cursor-pointer label justify-start gap-2 p-0">
+              <input type="checkbox" checked={isRecurring} onChange={() => setIsRecurring(!isRecurring)} className="checkbox" />
+              <span className="label-text">This is a recurring event</span>
+            </label>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Ends At</label>
-            <input
-              type="datetime-local"
-              value={form.ends_at}
-              onChange={(e) => update("ends_at", e.target.value)}
-              className="input input-bordered w-full"
-              required
-            />
-          </div>
+        )}
+
+        <div className="space-y-4">
+          {(isRecurring && !isEditing ? form.dates : [form.dates[0]]).map((date, index) => (
+            <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <div>
+                {index === 0 && <label className="block text-sm font-medium mb-1">Starts At</label>}
+                <input
+                  type="datetime-local"
+                  value={date.starts_at}
+                  onChange={(e) => handleDateChange(index, 'starts_at', e.target.value)}
+                  className="input input-bordered w-full"
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-grow">
+                  {index === 0 && <label className="block text-sm font-medium mb-1">Ends At</label>}
+                  <input
+                    type="datetime-local"
+                    value={date.ends_at}
+                    onChange={(e) => handleDateChange(index, 'ends_at', e.target.value)}
+                    className="input input-bordered w-full"
+                    required
+                  />
+                </div>
+                {isRecurring && !isEditing && form.dates.length > 1 && (
+                  <button type="button" onClick={() => removeDate(index)} className="btn btn-ghost btn-square">
+                    <Trash2 size={18} className="text-red-500" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {isRecurring && !isEditing && (
+            <button type="button" onClick={addDate} className="btn btn-sm btn-outline mt-2">
+              <Plus size={16} className="mr-1" />
+              Add another date
+            </button>
+          )}
         </div>
 
         {/* Address */}
@@ -373,19 +478,22 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
         </div>
 
         {/* Status */}
-        <div>
-          <label className="block text-sm font-medium mb-1">Status</label>
-          <select
-            value={form.status}
-            onChange={(e) => update("status", e.target.value)}
-            className="select select-bordered w-full"
-          >
-            <option value="scheduled">Scheduled</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
+        {/* FIX: Conditionally render the status dropdown based on role and use new values */}
+        {canChangeStatus && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <select
+              value={form.status}
+              onChange={(e) => update("status", e.target.value)}
+              className="select select-bordered w-full"
+            >
+              <option value="draft">Draft</option>
+              {/* Only show 'Published' and 'Archived' to users with permission */}
+              {canPublish && <option value="published">Published</option>}
+              {canArchive && <option value="archived">Archived</option>}
+            </select>
+          </div>
+        )}
 
         {/* --- MODIFIED: Submit Button Text --- */}
         <div className="pt-4">

@@ -1,58 +1,84 @@
-import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { type EventPin } from "@/lib/types";
 
 export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const bounds = searchParams.get("bounds");
+  const areaSlugs = searchParams.get("area_slugs")?.split(',');
+
   try {
-    const url = new URL(req.url);
-    const params = {
-      lat: Number(url.searchParams.get("lat")),
-      lng: Number(url.searchParams.get("lng")),
-      distance: Number(url.searchParams.get("distance")), // in miles
-      when: url.searchParams.get("when") ?? "today",
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      areaSlugs: url.searchParams.get("area_slugs"),
-    };
-
-    // Validate required parameters
-    if (isNaN(params.lat) || isNaN(params.lng) || isNaN(params.distance)) {
-      return NextResponse.json({ error: "Invalid lat, lng, or distance parameters" }, { status: 400 });
-    }
-
     const supabase = createSupabaseServer();
 
-    const areaSlugsArray = params.areaSlugs ? params.areaSlugs.split(',') : null;
-    // Call the new radius search function
-    const { data, error } = await supabase.rpc("map_events_radius", {
-      p_lat: params.lat,
-      p_lng: params.lng,
-      p_distance_miles: params.distance,
-      p_when: params.when,
-      p_tz: params.tz,
-      p_area_slugs: areaSlugsArray,
-    });
+    let query = supabase
+      .from('events')
+      .select(
+        `
+        id,
+        title,
+        description,
+        starts_at,
+        ends_at,
+        image_url,
+        address,
+        geom,
+        org:org_id ( name, slug ),
+        series:series_id ( id, title )
+        `
+      )
+      // FIX: Use the correct 'published' status for all public-facing queries.
+      .eq('status', 'published')
+      .order('starts_at', { ascending: true });
 
-    if (error) {
-      console.error("Map search RPC error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (bounds) {
+      const { ne, sw } = JSON.parse(bounds);
+      query = query.filter(
+        'geom',
+        'st_within',
+        `POLYGON((${ne.lng} ${ne.lat}, ${sw.lng} ${ne.lat}, ${sw.lng} ${sw.lat}, ${ne.lng} ${sw.lat}, ${ne.lng} ${ne.lat}))`
+      );
     }
 
-    const pins = (data ?? []).map((row: any) => ({
-      id: row.event_id,
-      title: row.title,
-      description: row.description,
-      starts_at: row.starts_at,
-      ends_at: row.ends_at,
-      address: row.address,
-      lat: row.latitude,
-      lng: row.longitude,
-      vendorId: row.vendor_id,
-      vendorName: row.vendor_name,
-      vendorSlug: row.vendor_slug,
-    }));
+    if (areaSlugs && areaSlugs.length > 0) {
+      query = query.filter('org.slug', 'in', `(${areaSlugs.join(',')})`);
+    }
 
-    return NextResponse.json(pins);
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Map search error:", error);
+      throw new Error(error.message);
+    }
+
+    // The geom column is a PostGIS point, e.g., "POINT(-80.8431 35.2271)"
+    // We need to parse it to get lat/lng for the map pins.
+    const eventsWithLatLng: EventPin[] = (data || []).map((event: any) => {
+      let lat = 0;
+      let lng = 0;
+      if (event.geom) {
+        const match = event.geom.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+        if (match) {
+          lng = parseFloat(match[1]);
+          lat = parseFloat(match[2]);
+        }
+      }
+      return {
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        starts_at: event.starts_at,
+        ends_at: event.ends_at,
+        address: event.address,
+        vendorName: event.org?.name,
+        vendorSlug: event.org?.slug,
+        lat,
+        lng,
+      };
+    });
+
+    return NextResponse.json(eventsWithLatLng);
+
   } catch (e: any) {
-    const message = e instanceof Error ? e.message : "An unknown error occurred.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }

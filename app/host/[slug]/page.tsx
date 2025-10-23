@@ -8,22 +8,60 @@ import { Tables } from "@/lib/database.types";
 import Link from "next/link";
 
 type Event = Tables<'events'>;
+type StatusTab = 'all' | 'published' | 'draft' | 'archived';
+type DateFilter = 'all' | 'upcoming' | 'past7' | 'past30';
 
 export default function HostEventsPage() {
   const { currentOrg, role, loading: hostLoading } = useHost();
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [activeTab, setActiveTab] = useState<StatusTab>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [deletingId, setDeletingId] = useState<string | null>(null); // NEW
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   useEffect(() => {
     if (currentOrg) {
       const supabase = createSupabaseBrowserClient();
       const fetchEvents = async () => {
         setLoadingEvents(true);
-        const { data, error } = await supabase
+        
+        let query = supabase
           .from('events')
           .select('*')
-          .eq('org_id', currentOrg.id)
-          .order('starts_at', { ascending: false });
+          .eq('org_id', currentOrg.id);
+
+        if (activeTab !== 'all') {
+          query = query.eq('status', activeTab);
+        }
+
+        if (debouncedSearchTerm) {
+          query = query.ilike('title', `%${debouncedSearchTerm}%`);
+        }
+
+        const now = new Date();
+        if (dateFilter === 'upcoming') {
+          query = query.gte('starts_at', now.toISOString());
+        } else if (dateFilter === 'past7') {
+          const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+          query = query.gte('starts_at', sevenDaysAgo.toISOString());
+        } else if (dateFilter === 'past30') {
+          const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+          query = query.gte('starts_at', thirtyDaysAgo.toISOString());
+        }
+
+        const { data, error } = await query.order('starts_at', { ascending: false });
 
         if (error) {
           console.error("Error fetching host events:", error);
@@ -34,13 +72,36 @@ export default function HostEventsPage() {
       };
       fetchEvents();
     }
-  }, [currentOrg]);
+  }, [currentOrg, activeTab, debouncedSearchTerm, dateFilter]);
 
   const isLoading = hostLoading || loadingEvents;
 
-  // FIX: Use correct lowercase roles from the useHost context.
   const canCreateEvents = role === 'owner' || role === 'manager' || role === 'admin';
   const canEditEvents = role === 'owner' || role === 'manager' || role === 'editor' || role === 'admin';
+  const canDeleteEvents = role === 'owner' || role === 'manager' || role === 'admin'; // NEW
+
+  const getTabClassName = (tabName: StatusTab) => {
+    return `tab flex-1 ${activeTab === tabName ? 'tab-active font-semibold' : ''}`;
+  };
+
+  // NEW: Delete handler (calls existing delete route)
+  async function handleDelete(id: string, title: string) {
+    const ok = window.confirm(`Delete event "${title}"? This cannot be undone.`);
+    if (!ok) return;
+
+    try {
+      setDeletingId(id);
+      const res = await fetch(`/admin/events/${id}/delete`, { method: 'DELETE' }); // CHANGED
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || 'Failed to delete event');
+
+      setEvents((prev) => prev.filter((e) => e.id !== id));
+    } catch (err: any) {
+      alert(`Error deleting event: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="bg-gray-50 min-h-full">
@@ -48,7 +109,6 @@ export default function HostEventsPage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Events</h1>
-          {/* This check now correctly includes admins */}
           {currentOrg && canCreateEvents && (
             <Link href={`/host/${currentOrg.slug}/events/new`} className="btn btn-primary">
               <Plus size={16} className="mr-1" />
@@ -61,20 +121,35 @@ export default function HostEventsPage() {
         <div className="flex gap-2 mb-4">
           <div className="relative flex-grow">
             <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" placeholder="Search events..." className="input input-bordered w-full pl-10" />
+            {/* FIX: Wire up search input */}
+            <input
+              type="text"
+              placeholder="Search events..."
+              className="input input-bordered w-full pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-          <button className="btn btn-outline">
-            <Filter size={16} />
-          </button>
+          {/* FIX: Implement filter dropdown */}
+          <div className="dropdown dropdown-end">
+            <button tabIndex={0} className="btn btn-outline">
+              <Filter size={16} />
+            </button>
+            <ul tabIndex={0} className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+              <li><a onClick={() => setDateFilter('all')} className={dateFilter === 'all' ? 'font-bold' : ''}>All Time</a></li>
+              <li><a onClick={() => setDateFilter('upcoming')} className={dateFilter === 'upcoming' ? 'font-bold' : ''}>Upcoming</a></li>
+              <li><a onClick={() => setDateFilter('past7')} className={dateFilter === 'past7' ? 'font-bold' : ''}>Past 7 Days</a></li>
+              <li><a onClick={() => setDateFilter('past30')} className={dateFilter === 'past30' ? 'font-bold' : ''}>Past 30 Days</a></li>
+            </ul>
+          </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center bg-base-200 rounded-lg p-1 mb-6">
-          <a className="tab tab-active flex-1">All</a>
-          <a className="tab flex-1">Published</a>
-          <a className="tab flex-1">Scheduled</a>
-          <a className="tab flex-1">Draft</a>
-          <a className="tab flex-1">Review</a>
+        <div className="tabs tabs-boxed bg-base-200 mb-6">
+          <a onClick={() => setActiveTab('all')} className={getTabClassName('all')}>All</a>
+          <a onClick={() => setActiveTab('published')} className={getTabClassName('published')}>Published</a>
+          <a onClick={() => setActiveTab('draft')} className={getTabClassName('draft')}>Draft</a>
+          <a onClick={() => setActiveTab('archived')} className={getTabClassName('archived')}>Archived</a>
         </div>
 
         {/* Content */}
@@ -101,18 +176,34 @@ export default function HostEventsPage() {
                       {new Date(event.starts_at).toLocaleString()}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        event.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                      {/* FIX: Update status badge styling for new values */}
+                      <span className={`rounded-full capitalize px-2 py-1 text-xs font-semibold ${
+                        event.status === 'published' ? 'bg-green-100 text-green-800' :
+                        event.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
                       }`}>
                         {event.status}
                       </span>
                     </td>
-                    <td className="px-4 py-2 space-x-2">
-                      {/* FIX: Implement conditional Edit Link */}
+                    <td className="px-4 py-2 space-x-3">
                       {canEditEvents && currentOrg && (
-                        <Link href={`/host/${currentOrg.slug}/events/${event.id}/edit`} className="text-blue-600 hover:underline">
+                        <Link
+                          href={`/host/${currentOrg.slug}/events/${event.id}/edit`}
+                          className="text-blue-600 hover:underline"
+                        >
                           Edit
                         </Link>
+                      )}
+                      {canDeleteEvents && (
+                        <button
+                          type="button"
+                          className="text-red-600 hover:underline disabled:opacity-50 cursor-pointer"
+                          onClick={() => handleDelete(event.id as string, event.title ?? 'Event')}
+                          disabled={deletingId === event.id}
+                          aria-disabled={deletingId === event.id}
+                        >
+                          {deletingId === event.id ? 'Deleting…' : 'Delete'}
+                        </button>
                       )}
                     </td>
                   </tr>
