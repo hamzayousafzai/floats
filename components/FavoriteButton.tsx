@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, memo } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -19,7 +19,7 @@ export type FavoriteButtonProps = {
   onChange?: (starred: boolean) => void;
 };
 
-export default function FavoriteButton({
+export default memo(function FavoriteButton({
   eventId,
   seriesId = null,
   startsAt = null,
@@ -34,10 +34,19 @@ export default function FavoriteButton({
   const [loading, setLoading] = useState<boolean>(false);
   const [starred, setStarred] = useState<boolean>(!!initialStarred);
 
-  // load star state when initialStarred not provided
+  // NEW: Whenever parent provides initialStarred, keep local state in sync.
+  // This removes the “false-then-true” flash.
+  useEffect(() => {
+    if (initialStarred !== undefined) {
+      setStarred(!!initialStarred);
+    }
+  }, [eventId, initialStarred]);
+
+  // load star state only when parent did NOT provide initialStarred
   useEffect(() => {
     let active = true;
-    if (initialStarred !== undefined) return;
+    if (initialStarred !== undefined) return; // parent controls; skip fetch
+
     (async () => {
       try {
         setLoading(true);
@@ -52,29 +61,23 @@ export default function FavoriteButton({
           .eq("event_id", eventId)
           .maybeSingle();
 
-        if (active) {
-          if (error) {
-            console.error("FavoriteButton load error:", error);
-            setStarred(false);
-            onChange?.(false);            // notify parent on error -> not starred
-          } else {
-            const resolved = !!data;
-            setStarred(resolved);
-            onChange?.(resolved);         // IMPORTANT: sync parent with initial value
-          }
+        if (!active) return;
+        if (error) {
+          console.error("FavoriteButton load error:", error);
+          setStarred(false);
+        } else {
+          setStarred(!!data);
         }
       } catch (err) {
         console.error("FavoriteButton load exception:", err);
-        if (active) {
-          setStarred(false);
-          onChange?.(false);
-        }
+        if (active) setStarred(false);
       } finally {
         if (active) setLoading(false);
       }
     })();
+
     return () => { active = false; };
-  }, [eventId, initialStarred, supabase, onChange]);
+  }, [eventId, supabase, initialStarred]);
 
   const toggle = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -156,4 +159,4 @@ export default function FavoriteButton({
       <span className="whitespace-nowrap">{starred ? "Favorited" : "Favorite"}</span>
     </button>
   );
-}
+});
