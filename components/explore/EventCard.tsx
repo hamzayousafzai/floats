@@ -13,21 +13,26 @@ type Props = {
 };
 
 export default function EventCard({ card, onClick }: Props) {
-  const eventDate = new Date(card.starts_at);
+  // starts_at is string | null; guard it
+  const startDate = card.starts_at ? new Date(card.starts_at) : null;
 
-  const formattedDate = eventDate.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  const formattedDate = startDate
+    ? startDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+    : null;
 
-  const formattedTime = eventDate.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const formattedTime = startDate
+    ? startDate.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : null;
 
   return (
     <div
@@ -64,16 +69,20 @@ export default function EventCard({ card, onClick }: Props) {
           </div>
         )}
         <div className="mt-2 space-y-1.5 text-sm text-base-content/70">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 flex-shrink-0" />
-            <span>
-              {formattedDate} at {formattedTime}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">{card.address}</span>
-          </div>
+          {startDate && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 flex-shrink-0" />
+              <span>
+                {formattedDate} at {formattedTime}
+              </span>
+            </div>
+          )}
+          {card.address && (
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">{card.address}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-// components/FavoriteEventsSection.tsx
 "use client";
 
 import { useEffect, useState } from "react";
