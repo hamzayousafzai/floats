@@ -1,4 +1,4 @@
-// import type { ExploreCardData } from "@/components/explore/EventCard";
+// import type { ExploreCardData } from "@/lib/types";
 
 // // This file is now for all mappers that create Explore Cards
 

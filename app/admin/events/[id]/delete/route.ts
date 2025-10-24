@@ -2,46 +2,83 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-export async function DELETE(
-  req: Request,
+// Define roles that are allowed to perform deletions
+const ALLOWED_ROLES = ["owner", "manager", "admin"];
+
+// Main handler for both DELETE and POST methods
+async function handler(
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: eventId } = await params;
 
-    // 1. Authenticate and authorize the user as an admin
+    // Auth check
     const supabase = await createSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    // You should also add a check here to ensure the user has an admin role.
 
-    // 2. Use the admin client for elevated privileges
-    const supabaseAdmin = createSupabaseAdmin();
+    const admin = createSupabaseAdmin();
 
-    // 3. Delete dependent records from child tables first
-    // It's best to do these in parallel for performance.
+    // Fetch the event to get its org_id for the role check
+    const { data: evt, error: evtErr } = await admin
+      .from("events")
+      .select("id, org_id, series_id")
+      .eq("id", eventId)
+      .single();
+
+    if (evtErr || !evt) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // Server-side role check to block editors
+    const { data: mem, error: memErr } = await supabase
+      .from("org_members")
+      .select("role")
+      .eq("org_id", evt.org_id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (memErr || !mem || !ALLOWED_ROLES.includes(mem.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Cleanup all related child tables
     await Promise.all([
-      supabaseAdmin.from("event_notifications").delete().eq("event_id", eventId),
-      supabaseAdmin.from("event_stars").delete().eq("event_id", eventId),
-      supabaseAdmin.from("event_categories").delete().eq("event_id", eventId),
+      admin.from("event_notifications").delete().eq("event_id", eventId),
+      admin.from("event_stars").delete().eq("event_id", eventId),
+      admin.from("event_categories").delete().eq("event_id", eventId),
+      admin.from("event_media").delete().eq("event_id", eventId),
     ]);
 
-    // 4. Now, delete the main event record
-    const { error: deleteEventError } = await supabaseAdmin
-      .from("events")
-      .delete()
-      .eq("id", eventId);
+    // Delete the event itself
+    const { error: delErr } = await admin.from("events").delete().eq("id", eventId);
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
 
-    if (deleteEventError) {
-      // If the event deletion itself fails after cleaning up, throw an error
-      throw new Error(`Failed to delete event: ${deleteEventError.message}`);
+    // If the event was part of a series, check if the series is now empty
+    if (evt.series_id) {
+      const { data: remaining, error: remErr } = await admin
+        .from("events")
+        .select("id")
+        .eq("series_id", evt.series_id)
+        .limit(1);
+
+      // If no events are left in the series, delete the series
+      if (!remErr && (!remaining || remaining.length === 0)) {
+        await admin.from("series").delete().eq("id", evt.series_id);
+      }
     }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error("Delete event error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Failed to delete event" }, { status: 500 });
   }
 }
+
+// Export the handler for both DELETE and POST HTTP methods
+export { handler as DELETE, handler as POST };

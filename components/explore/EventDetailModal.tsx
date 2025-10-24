@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { type ExploreCardData } from "./EventCard";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { ExploreCardData } from "@/lib/types";
 import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
@@ -10,7 +10,7 @@ import NotificationBell from "@/components/NotificationBell";
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
-  onCardChange?: (id: string, patch: Partial<ExploreCardData> | Partial<any>) => void;
+  onCardChange?: (id: string, patch: Partial<ExploreCardData>) => void;
 };
 
 export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
@@ -18,6 +18,8 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
   const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const fetchedKey = useRef<string | null>(null);
 
   // Memoize the sorted images array
   const sortedImages = useMemo(() => {
@@ -28,46 +30,13 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     return [...event.event_media].sort((a, b) => a.sort_index - b.sort_index);
   }, [event?.event_media, event?.image_url]);
 
+  // Reset index and hydrate from event payload only. No network calls here.
   useEffect(() => {
-    // FIX: Reset the image index whenever the event changes.
     setCurrentImageIndex(0);
-
     setStarred(event?.is_starred ?? false);
-    let mounted = true;
-    (async () => {
-      if (!event?.id) return;
-
-      // load persisted notify state (set local state only; DO NOT call onCardChange here)
-      try {
-        const notifyRes = await fetch(`/api/events/${event.id}/notify`);
-        const notifyJson = notifyRes.ok ? await notifyRes.json() : { notified: false };
-        if (mounted) {
-          setNotified(Boolean(notifyJson.notified));
-          // removed: onCardChange?.(event.id, { is_notified: Boolean(notifyJson.notified) });
-        }
-      } catch {
-        if (mounted) setNotified(false);
-      }
-
-      // load series follow state (set local state only)
-      if (event?.series_id) {
-        try {
-          const followRes = await fetch(`/api/series/${event.series_id}/follow`);
-          const followJson = followRes.ok ? await followRes.json() : { following: false };
-          if (mounted) {
-            setFollowing(Boolean(followJson.following));
-            // removed: onCardChange?.(event.id, { is_series_followed: Boolean(followJson.following) });
-          }
-        } catch {
-          if (mounted) setFollowing(false);
-        }
-      } else {
-        if (mounted) setFollowing(false);
-      }
-    })();
-
-    return () => { mounted = false; };
-  }, [event?.id, event?.series_id]); // keep deps minimal
+    setNotified(event?.is_notified ?? false);
+    setFollowing(event?.is_series_followed ?? false);
+  }, [event?.id, event?.is_starred, event?.is_notified, event?.is_series_followed]);
 
   const handleFavoriteChange = async (next: boolean) => {
     setStarred(next);
@@ -165,50 +134,51 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     });
   }, []);
 
-  const formatEventTimeRange = useCallback((startsAt: string, endsAt?: string | null) => {
-    const startDate = new Date(startsAt);
-    
-    const startFormatted = startDate.toLocaleString("en-US", {
-      timeZone: "America/New_York",
-      weekday: "long",
-      year: "numeric",
-      month: "long", 
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    });
+  // Replace the signature/body so it accepts nullable inputs
+  const formatEventTimeRange = useCallback(
+    (startsAt?: string | null, endsAt?: string | null) => {
+      if (!startsAt) return "";
+      const startDate = new Date(startsAt);
 
-    if (!endsAt) {
-      return startFormatted;
-    }
-
-    const endDate = new Date(endsAt);
-    const isSameDay = startDate.toDateString() === endDate.toDateString();
-    
-    if (isSameDay) {
-      // Same day - show end time only
-      const endTime = endDate.toLocaleString("en-US", {
+      const startFormatted = startDate.toLocaleString("en-US", {
         timeZone: "America/New_York",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
         hour: "numeric",
         minute: "2-digit",
-        hour12: true
+        hour12: true,
       });
-      return `${startFormatted} - ${endTime}`;
-    } else {
-      // Different days - show full end date/time
+
+      if (!endsAt) return startFormatted;
+
+      const endDate = new Date(endsAt);
+      const isSameDay = startDate.toDateString() === endDate.toDateString();
+
+      if (isSameDay) {
+        const endTime = endDate.toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        return `${startFormatted} - ${endTime}`;
+      }
+
       const endFormatted = endDate.toLocaleString("en-US", {
         timeZone: "America/New_York",
         weekday: "long",
         month: "long",
-        day: "numeric", 
+        day: "numeric",
         hour: "numeric",
         minute: "2-digit",
-        hour12: true
+        hour12: true,
       });
       return `${startFormatted} - ${endFormatted}`;
-    }
-  }, []);
+    },
+    []
+  );
 
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) => (prevIndex + 1) % sortedImages.length);
@@ -218,11 +188,22 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     setCurrentImageIndex((prevIndex) => (prevIndex - 1 + sortedImages.length) % sortedImages.length);
   };
 
+  useEffect(() => {
+    const key = `${event?.id}:${event?.series_id ?? ""}`;
+    if (fetchedKey.current === key) return; // prevents duplicate fetches in Strict Mode
+    fetchedKey.current = key;
+
+    // do the GETs here...
+  }, [event?.id, event?.series_id]);
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
         <div className="modal-box">
-          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
+          {/* Wrap the close button in a form with method="dialog" */}
+          <form method="dialog">
+            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
+          </form>
 
           {sortedImages.length > 0 && (
             <figure className="relative h-48 -mx-6 -mt-6 mb-4 bg-gray-200 rounded-t-lg overflow-hidden">
@@ -237,16 +218,16 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
 
               {/* Carousel Controls Wrapper - Only show if there is more than one image */}
               {sortedImages.length > 1 && (
-                <div className="absolute inset-0 z-10 flex items-center justify-between">
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-between pointer-events-none">
                   <button 
                     onClick={prevImage} 
-                    className="btn btn-ghost btn-circle btn-sm ml-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition"
+                    className="btn btn-ghost btn-circle btn-sm ml-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition pointer-events-auto"
                   >
                     <ChevronLeft size={20} />
                   </button>
                   <button 
                     onClick={nextImage} 
-                    className="btn btn-ghost btn-circle btn-sm mr-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition"
+                    className="btn btn-ghost btn-circle btn-sm mr-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition pointer-events-auto"
                   >
                     <ChevronRight size={20} />
                   </button>
@@ -262,11 +243,12 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
 
             <div className="flex items-center gap-3 ml-auto">
               <NotificationBell
+                key={event.id}                 // ensure a clean mount per event
                 eventId={event.id}
                 seriesId={event.series_id ?? null}
                 visible={Boolean(starred)}
-                initialNotified={notified}
-                initialFollowing={following}
+                initialNotified={notified}     // optional: pass if your Bell supports it
+                initialFollowing={following}   // optional
                 className="mr-1"
                 onNotifyChange={handleNotifyChange}
                 onFollowChange={handleFollowChange}
@@ -287,10 +269,12 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
           {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
 
           <div className="mt-2 space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
-            </div>
+            {event.starts_at && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-gray-500" />
               <span>{event.address}</span>
@@ -314,6 +298,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
           </div>
         </div>
       )}
+      {/* This form handles the backdrop click to close */}
       <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
     </dialog>
   );
