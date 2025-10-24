@@ -9,7 +9,7 @@ export type ExploreCardData = {
   image_url: string | null;
   title: string;
   starts_at: string;
-  ends_at?: string | null; // Add this field
+  ends_at?: string | null;
   address: string;
   latitude?: number | null;
   longitude?: number | null;
@@ -19,19 +19,18 @@ export type ExploreCardData = {
   is_notified?: boolean;
   is_series_followed?: boolean;
   series_id?: string | null;
-  // Add this line to include the multiple images
   event_media?: { image_url: string; sort_index: number }[] | null;
+  is_past?: boolean;
 };
 
 type Props = {
   card: ExploreCardData;
-  onClick: () => void; // Add onClick to the props
+  onClick: () => void;
 };
 
 export default function EventCard({ card, onClick }: Props) {
   const eventDate = new Date(card.starts_at);
 
-  // Format with EST timezone
   const formattedDate = eventDate.toLocaleString("en-US", {
     timeZone: "America/New_York",
     weekday: "short",
@@ -47,7 +46,6 @@ export default function EventCard({ card, onClick }: Props) {
   });
 
   return (
-    // Use a button for accessibility and to trigger the onClick handler
     <div
       onClick={onClick}
       className="card card-compact bg-base-100 shadow-md hover:shadow-lg transition-shadow cursor-pointer"
@@ -57,12 +55,16 @@ export default function EventCard({ card, onClick }: Props) {
           <Image
             src={card.image_url}
             alt={card.title}
-            fill className="object-cover"
+            fill
+            className={`object-cover ${card.is_past ? "grayscale opacity-70" : ""}`}
           />
         ) : (
           <div className="flex items-center justify-center h-full w-full">
             <ImageIcon className="h-12 w-12 text-base-300" />
           </div>
+        )}
+        {card.is_past && (
+          <span className="badge badge-neutral absolute left-2 top-2">PAST</span>
         )}
       </figure>
 

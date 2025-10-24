@@ -82,12 +82,17 @@ export default function FeaturedEventCard({
             src={card.image_url}
             alt={card.title ?? "event image"}
             fill
-            className="object-cover"
+            // PAST: dim/grayscale past cards
+            className={`object-cover ${card.is_past ? "grayscale opacity-70" : ""}`}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
             No image
           </div>
+        )}
+        {/* PAST badge */}
+        {card.is_past && (
+          <span className="badge badge-neutral absolute left-2 top-2">PAST</span>
         )}
       </div>
 
@@ -106,6 +111,7 @@ export default function FeaturedEventCard({
           </div>
         </div>
 
+        {/* Keep showing date/time for past cards as well */}
         {dateText && <p className="text-xs text-gray-500 mt-1">{dateText}</p>}
 
         {card.address && (
