@@ -7,7 +7,7 @@ import EventDetailModal from "@/components/explore/EventDetailModal";
 import PastFavoritesModal from "@/components/profile/PastFavoritesModal";
 
 // IMPORTANT: use the shared ExploreCardData shape so EventDetailModal(event) accepts it
-import type { ExploreCardData } from "@/components/explore/EventCard";
+import type { ExploreCardData } from "@/lib/types";
 
 type Props = { events: Array<any> };
 type ActionCard = { id: "__view_past__", type: "action"; label?: string };

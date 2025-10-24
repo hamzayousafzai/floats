@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { ExploreCardData } from "@/components/explore/EventCard";
+import type { ExploreCardData } from "@/lib/types";
 
 type Props = {
   pastCards: (ExploreCardData & { is_past?: boolean })[];

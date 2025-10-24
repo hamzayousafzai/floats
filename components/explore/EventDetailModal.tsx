@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { type ExploreCardData } from "./EventCard";
+import type { ExploreCardData } from "@/lib/types";
 import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
@@ -10,7 +10,7 @@ import NotificationBell from "@/components/NotificationBell";
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
-  onCardChange?: (id: string, patch: Partial<ExploreCardData> | Partial<any>) => void;
+  onCardChange?: (id: string, patch: Partial<ExploreCardData>) => void;
 };
 
 export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
@@ -134,50 +134,51 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     });
   }, []);
 
-  const formatEventTimeRange = useCallback((startsAt: string, endsAt?: string | null) => {
-    const startDate = new Date(startsAt);
-    
-    const startFormatted = startDate.toLocaleString("en-US", {
-      timeZone: "America/New_York",
-      weekday: "long",
-      year: "numeric",
-      month: "long", 
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    });
+  // Replace the signature/body so it accepts nullable inputs
+  const formatEventTimeRange = useCallback(
+    (startsAt?: string | null, endsAt?: string | null) => {
+      if (!startsAt) return "";
+      const startDate = new Date(startsAt);
 
-    if (!endsAt) {
-      return startFormatted;
-    }
-
-    const endDate = new Date(endsAt);
-    const isSameDay = startDate.toDateString() === endDate.toDateString();
-    
-    if (isSameDay) {
-      // Same day - show end time only
-      const endTime = endDate.toLocaleString("en-US", {
+      const startFormatted = startDate.toLocaleString("en-US", {
         timeZone: "America/New_York",
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
         hour: "numeric",
         minute: "2-digit",
-        hour12: true
+        hour12: true,
       });
-      return `${startFormatted} - ${endTime}`;
-    } else {
-      // Different days - show full end date/time
+
+      if (!endsAt) return startFormatted;
+
+      const endDate = new Date(endsAt);
+      const isSameDay = startDate.toDateString() === endDate.toDateString();
+
+      if (isSameDay) {
+        const endTime = endDate.toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        return `${startFormatted} - ${endTime}`;
+      }
+
       const endFormatted = endDate.toLocaleString("en-US", {
         timeZone: "America/New_York",
         weekday: "long",
         month: "long",
-        day: "numeric", 
+        day: "numeric",
         hour: "numeric",
         minute: "2-digit",
-        hour12: true
+        hour12: true,
       });
       return `${startFormatted} - ${endFormatted}`;
-    }
-  }, []);
+    },
+    []
+  );
 
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) => (prevIndex + 1) % sortedImages.length);
@@ -268,10 +269,12 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
           {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
 
           <div className="mt-2 space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
-            </div>
+            {event.starts_at && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-gray-500" />
+                <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-gray-500" />
               <span>{event.address}</span>

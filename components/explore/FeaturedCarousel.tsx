@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import FeaturedEventCard from "./FeaturedEventCard";
-import type { ExploreCardData } from "@/components/explore/EventCard";
+import type { ExploreCardData } from "@/lib/types";
 
 type ActionCard = { id: "__view_past__"; type: "action"; label?: string };
 

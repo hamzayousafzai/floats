@@ -4,24 +4,8 @@ import Image from "next/image";
 import { Calendar, MapPin, ImageIcon } from "lucide-react";
 import SeriesFollowButton from "@/components/SeriesFollowButton";
 
-export type ExploreCardData = {
-  id: string;
-  image_url: string | null;
-  title: string;
-  starts_at: string;
-  ends_at?: string | null;
-  address: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  description?: string | null;
-  categories: string[];
-  is_starred?: boolean;
-  is_notified?: boolean;
-  is_series_followed?: boolean;
-  series_id?: string | null;
-  event_media?: { image_url: string; sort_index: number }[] | null;
-  is_past?: boolean;
-};
+import type { ExploreCardData } from "@/lib/types";
+export type { ExploreCardData } from "@/lib/types";
 
 type Props = {
   card: ExploreCardData;

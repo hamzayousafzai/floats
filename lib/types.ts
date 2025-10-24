@@ -25,3 +25,23 @@ export type OrgMember = {
   role: Database['public']['Enums']['org_role'] | 'admin';
 };
 
+// Event card shape used by carousels/modals (client-only UI)
+export type ExploreCardData = {
+  id: string;
+  title: string;
+  image_url: string | null;
+  starts_at: string | null;      // must allow null
+  ends_at?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  description?: string | null;
+  categories: string[];
+  is_starred?: boolean;
+  is_notified?: boolean;
+  is_series_followed?: boolean;
+  series_id?: string | null;
+  event_media?: { image_url: string; sort_index: number }[] | null;
+  is_past?: boolean;             // UI hint
+};
+
