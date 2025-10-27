@@ -21,6 +21,9 @@
     "react-dom": "19.1.0",
     "react-easy-crop": "^5.5.0"
   },
+  "daisyui": {
+    "themes": ["light", "corporate", "forest"]
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",

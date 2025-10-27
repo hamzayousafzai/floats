@@ -60,17 +60,17 @@ export default function ExploreFilters({
   };
 
   return (
-    // The main sticky container now uses flex-col
-    <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b p-2 flex flex-col gap-2">
+    // Changed: bg-base-200 to match page, removed white/backdrop-blur
+    <div className="sticky top-0 z-20 bg-base-200 border-b border-base-300 p-2 flex flex-col gap-2">
       {/* Row 1: Search Bar */}
       <div className="relative w-full">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-base-content/50" />
         <input
           type="text"
           placeholder="Search events..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="input input-bordered w-full h-12 pl-11 pr-3 rounded-full leading-normal
+          className="input input-bordered w-full h-12 pl-11 pr-3 rounded-full leading-normal bg-base-100
                placeholder:text-base-content/50"
         />
       </div>
@@ -101,7 +101,7 @@ export default function ExploreFilters({
         {isFilterActive && (
           <button
             onClick={clearFilters}
-            className="text-xs flex items-center gap-1 text-gray-600 hover:text-black whitespace-nowrap"
+            className="text-xs flex items-center gap-1 text-base-content/70 hover:text-base-content whitespace-nowrap"
           >
             <X className="h-3 w-3" />
             Clear Filters

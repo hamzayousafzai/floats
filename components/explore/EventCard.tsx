@@ -37,7 +37,7 @@ export default function EventCard({ card, onClick }: Props) {
   return (
     <div
       onClick={onClick}
-      className="card card-compact bg-base-100 shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+      className="card card-compact bg-base-300 shadow-md hover:shadow-lg transition-shadow cursor-pointer border border-base-300/50"
     >
       <figure className="relative h-40 bg-base-200">
         {card.image_url ? (

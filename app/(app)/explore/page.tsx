@@ -52,11 +52,13 @@ export default async function ExplorePage({ searchParams }: { searchParams: Prom
   // Map the results to the card data shape
 
   return (
-    <ExploreView
-      featuredCards={featuredCards}
-      initialCards={cards}
-      availableAreas={areas ?? []}
-      availableCategories={categories ?? []}
-    />
+    <>
+      <ExploreView
+        featuredCards={featuredCards}
+        initialCards={cards}
+        availableAreas={areas ?? []}
+        availableCategories={categories ?? []}
+      />
+    </>
   );
 }

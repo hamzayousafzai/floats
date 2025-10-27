@@ -199,7 +199,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
-        <div className="modal-box">
+        <div className="modal-box border border-base-300 bg-base-300">  {/* Added border */}
           {/* Wrap the close button in a form with method="dialog" */}
           <form method="dialog">
             <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>

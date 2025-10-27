@@ -94,13 +94,11 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
-      <div className="w-full max-w-md border bg-white rounded-xl p-6 space-y-6 shadow-sm">
+    <main className="min-h-screen flex items-center justify-center p-6 bg-base-200">
+      <div className="w-full max-w-md rounded-xl p-6 space-y-6 shadow border border-base-300 bg-base-300 text-base-content">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            Join Floats
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold">Join Floats</h1>
+          <p className="mt-2 text-sm text-base-content/70">
             Discover local markets and pop-ups in Charlotte. Save your favorites, set reminders, and never miss out.
           </p>
         </div>
@@ -114,14 +112,14 @@ export default function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="input input-bordered mt-1 w-full bg-base-200 placeholder:text-base-content/50"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
             </label>
             <button
               type="submit"
-              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
+              className="btn btn-primary w-full"
               disabled={!email || sent}
             >
               {sent ? "Code sent ✓" : "Send code"}
@@ -131,7 +129,7 @@ export default function LoginForm() {
 
         {step === "verify" && (
           <form onSubmit={verifyCode} className="space-y-4">
-            <div className="text-sm text-gray-600 text-center">
+            <div className="text-sm text-base-content/70 text-center">
               We sent a 6‑digit code to
               <span className="font-medium"> {email}</span>
             </div>
@@ -146,22 +144,22 @@ export default function LoginForm() {
                 onChange={(e) =>
                   setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                 }
-                className="mt-1 tracking-widest text-center text-lg font-medium w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="input input-bordered mt-1 w-full text-center tracking-widest text-lg font-medium bg-base-200 placeholder:text-base-content/50"
                 placeholder="••••••"
               />
             </label>
             <button
               type="submit"
-              className="w-full rounded-md bg-black text-white py-2 font-semibold disabled:opacity-50 transition-opacity"
+              className="btn btn-primary w-full"
               disabled={code.length !== 6 || verifying}
             >
               {verifying ? "Verifying..." : "Verify & Sign In"}
             </button>
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs">
               <button
                 type="button"
                 onClick={() => setStep("request")}
-                className="underline hover:text-black"
+                className="btn btn-link btn-xs text-base-content/70"
               >
                 Change email
               </button>
@@ -169,7 +167,7 @@ export default function LoginForm() {
                 type="button"
                 onClick={resend}
                 disabled={resending}
-                className="underline hover:text-black disabled:opacity-50"
+                className="btn btn-link btn-xs text-base-content/70 disabled:opacity-50"
               >
                 {resending ? "Resending..." : "Resend code"}
               </button>
@@ -177,9 +175,9 @@ export default function LoginForm() {
           </form>
         )}
 
-        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+        {error && <p className="text-sm text-error text-center">{error}</p>}
 
-        <p className="text-xs text-gray-500 text-center">
+        <p className="text-xs text-base-content/60 text-center">
           Enter your email to receive a one‑time code. No password required.
         </p>
       </div>

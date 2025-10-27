@@ -66,7 +66,7 @@ export default function ExploreView({
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-base-200">  {/* Changed from default to bg-base-200 */}
 
       <ExploreFilters
         currentFilters={currentFilters}
