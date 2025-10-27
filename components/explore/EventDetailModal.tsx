@@ -6,6 +6,8 @@ import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, Chevron
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
 import NotificationBell from "@/components/NotificationBell";
+import CheckInButton from "@/components/checkin/CheckInButton";
+import { useSearchParams } from "next/navigation";
 
 type Props = {
   event: ExploreCardData | null;
@@ -20,6 +22,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const fetchedKey = useRef<string | null>(null);
+  const searchParams = useSearchParams();
 
   // Memoize the sorted images array
   const sortedImages = useMemo(() => {
@@ -199,7 +202,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
-        <div className="modal-box border border-base-300 bg-base-300">  {/* Added border */}
+        <div className="modal-box border border-base-300 bg-base-300">
           {/* Wrap the close button in a form with method="dialog" */}
           <form method="dialog">
             <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
@@ -281,7 +284,20 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
+          {/* Primary CTA: full-width Check In */}
+          {event.starts_at && (
+            <div className="mt-4">
+              <CheckInButton
+                eventId={event.id}
+                startsAt={event.starts_at}
+                endsAt={event.ends_at ?? null}
+                autoRun={searchParams.get("doCheckIn") === "1"}
+              />
+            </div>
+          )}
+
+          {/* Secondary actions */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
             {canGetDirections && (
               <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
                 <Navigation className="h-4 w-4" /> Get Directions

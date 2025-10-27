@@ -64,8 +64,8 @@ export default function LoginForm() {
       }
       if (vErr) throw vErr;
       if (data?.session) {
-        const nextUrl = searchParams.get('next');
-        router.replace(nextUrl || "/profile");
+        const returnTo = searchParams.get('returnTo') || searchParams.get('next');
+        router.replace(returnTo || "/profile");
       } else {
         setError("Invalid or expired code.");
       }
