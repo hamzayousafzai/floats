@@ -34,7 +34,11 @@ export default function MapPage() {
       <Suspense fallback={<div className="flex items-center justify-center h-full">Loading map...</div>}>
         <MapCanvas onPinClick={handlePinClick} />
       </Suspense>
-      <EventDetailModal event={selectedEvent} onClose={closeModal} />
+
+      {/* NEW: wrap the modal tree (contains useSearchParams via CheckInButton) */}
+      <Suspense fallback={null}>
+        <EventDetailModal event={selectedEvent} onClose={closeModal} />
+      </Suspense>
     </div>
   );
 }
