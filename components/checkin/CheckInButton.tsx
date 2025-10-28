@@ -14,9 +14,10 @@ type Props = {
   startsAt?: string | null;
   endsAt?: string | null;
   autoRun?: boolean;
+  initialChecked?: boolean; // NEW
 };
 
-export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = false }: Props) {
+export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = false, initialChecked = false }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -32,6 +33,7 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
   const [status, setStatus] = useState<string | null>(null);
   const [geoReady, setGeoReady] = useState(false);
   const [permState, setPermState] = useState<"prompt" | "granted" | "denied" | null>(null);
+  const [alreadyChecked, setAlreadyChecked] = useState<boolean>(initialChecked); // NEW
 
   const insecure =
     typeof window !== "undefined" &&
@@ -67,11 +69,15 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
   const visible = (isMobileUA() || allowDesktop) && geoReady && inWindow;
 
   useEffect(() => {
-    if (visible && autoRun) {
+    setAlreadyChecked(initialChecked);
+  }, [initialChecked]);
+
+  useEffect(() => {
+    if (visible && autoRun && !alreadyChecked && status !== "success") {
       submit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, autoRun]);
+  }, [visible, autoRun, alreadyChecked]);
 
   function submit() {
     if (insecure) {
@@ -148,6 +154,7 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
             setStatus(json?.code === "outside_geofence" ? "outside_geofence" : "generic_error");
           } else {
             setStatus("success");
+            setAlreadyChecked(true); // NEW: lock UI after success
           }
         } catch (e: any) {
           if (debugClient) console.error("[check-in][client] error", e);
@@ -178,45 +185,70 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
 
   if (!visible) return null;
 
-  const label =
-    status === "success" ? "Checked In" : busy ? "Checking in…" : "Check In";
+  const isChecked = alreadyChecked || status === "success";
+  const label = isChecked ? "Checked In" : busy ? "Checking in…" : "Check In";
 
-  let errorText: string | null = null;
-  if (status === "permission_denied") {
-    errorText = "Location is blocked for this site. Enable it in your browser settings and try again.";
-  } else if (status === "insecure_context") {
-    errorText = "Location requires HTTPS. Use a secure connection (or localhost in dev).";
-  } else if (status === "outside_geofence") {
-    errorText = "You appear to be outside the event's check‑in area.";
-  } else if (status === "timeout") {
-    errorText = "Location request timed out. Try again near a window with better signal.";
-  } else if (status === "generic_error") {
-    errorText = "Couldn't check in. Please try again.";
+  const errorText: string | null =
+    status === "permission_denied"
+      ? "Location is blocked for this site. Enable it in your browser settings and try again."
+      : status === "insecure_context"
+      ? "Location requires HTTPS. Use a secure connection (or localhost in dev)."
+      : status === "outside_geofence"
+      ? "You appear to be outside the event’s check‑in area."
+      : status === "timeout"
+      ? "Location request timed out. Try again near a window with better signal."
+      : status === "generic_error"
+      ? "Couldn't check in. Please try again."
+      : null;
+
+  function onClickCheckedSafe() {
+    if (busy || isChecked) return; // JS guard (keyboard + mouse)
+    submit();
   }
 
   return (
     <div>
       <button
         type="button"
-        onClick={submit}
-        disabled={busy || status === "success"}
-        className="btn btn-primary w-full"
+        onClick={onClickCheckedSafe}
+        // Only disable when busy to keep DaisyUI from greying the success state
+        disabled={busy}
+        aria-disabled={isChecked ? true : undefined}
+        tabIndex={isChecked ? -1 : undefined}
+        className={
+          "btn w-full " +
+          (isChecked
+            ? "btn-success text-white font-semibold border-none pointer-events-none cursor-default"
+            : "btn-primary")
+        }
+        title={isChecked ? "Already checked in" : undefined}
         aria-live="polite"
       >
-        {label}
+        {isChecked ? (
+          <>
+            <svg
+              className="inline-block w-5 h-5 mr-2 -ml-1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={3}
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Checked In
+          </>
+        ) : busy ? "Checking in…" : "Check In"}
       </button>
-      <p className="mt-2 text-xs text-base-content/60">We'll use your location once to verify you're at the event.</p>
+
+      <p className="mt-2 text-xs text-base-content/60">
+        We’ll use your location once to verify you’re at the event.
+      </p>
+
       {errorText && (
-        <div className="mt-2">
-          <p role="alert" className="text-sm text-error">{errorText}</p>
-          {status === "permission_denied" && (
-            <ul className="mt-2 text-xs text-base-content/60 list-disc pl-4 space-y-1">
-              <li>Chrome: lock icon → Site settings → Location → Allow.</li>
-              <li>iOS Safari: Settings → Privacy & Security → Location Services → Safari → While Using the App.</li>
-              <li>Ensure Location Services are enabled on the device.</li>
-            </ul>
-          )}
-        </div>
+        <p role="alert" className="mt-2 text-sm text-error">
+          {errorText}
+        </p>
       )}
     </div>
   );

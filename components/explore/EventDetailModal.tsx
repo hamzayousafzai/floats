@@ -20,6 +20,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
   const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [alreadyChecked, setAlreadyChecked] = useState(false); // NEW
 
   const fetchedKey = useRef<string | null>(null);
   const searchParams = useSearchParams();
@@ -199,6 +200,26 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     // do the GETs here...
   }, [event?.id, event?.series_id]);
 
+  // Check-in state effect
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      if (!event?.id) {
+        setAlreadyChecked(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/check-in?event_id=${event.id}`, { cache: "no-store" });
+        if (!res.ok) { setAlreadyChecked(false); return; }
+        const json = await res.json();
+        if (!abort) setAlreadyChecked(Boolean(json?.checked));
+      } catch {
+        if (!abort) setAlreadyChecked(false);
+      }
+    })();
+    return () => { abort = true; };
+  }, [event?.id]);
+
   return (
     <dialog id="event_modal" className="modal" open={!!event}>
       {event && (
@@ -292,6 +313,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
                 startsAt={event.starts_at}
                 endsAt={event.ends_at ?? null}
                 autoRun={searchParams.get("doCheckIn") === "1"}
+                initialChecked={alreadyChecked} // NEW
               />
             </div>
           )}
