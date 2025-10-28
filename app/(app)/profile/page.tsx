@@ -7,6 +7,7 @@ import Link from "next/link";
 import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import SwitchViewButton from "@/components/profile/SwitchViewButton";
+import ProfileStats from "@/components/profile/ProfileStats";
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServer();
@@ -30,6 +31,65 @@ export default async function ProfilePage() {
     .eq("user_id", user.id)
     .eq("notify", true);
 
+  // Get count of user check-ins
+  const { count: checkinCount } = await supabase
+    .from("check_ins")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  // Two-step fetch: check_ins → events (normalize keys to strings to avoid Map miss)
+  const { data: checkinRows } = await supabase
+    .from("check_ins")
+    .select("event_id, checked_at")
+    .eq("user_id", user.id)
+    .order("checked_at", { ascending: false })
+    .limit(200);
+
+  const checkedAtMap = new Map<string, string>(
+    (checkinRows ?? []).map(r => [String(r.event_id), String(r.checked_at)])
+  );
+
+  const checkinEventIds = Array.from(
+    new Set((checkinRows ?? []).map(r => String(r.event_id)))
+  );
+
+  let checkedInEvents: Array<any> = [];
+
+  if (checkinEventIds.length) {
+    const { data: rows } = await supabase
+      .from("events")
+      .select(`
+        id, title, description, starts_at, ends_at, address, image_url,
+        latitude, longitude, series_id,
+        event_media ( image_url, sort_index )
+      `)
+      .in("id", checkinEventIds);
+
+    const normalize = (ev: any) => ({
+      id: ev.id,
+      title: ev.title,
+      starts_at: ev.starts_at,
+      ends_at: ev.ends_at,
+      description: ev.description ?? null,
+      image_url: ev.image_url ?? null,
+      address: ev.address ?? "",
+      latitude: ev.latitude ?? null,
+      longitude: ev.longitude ?? null,
+      series_id: ev.series_id ?? null,
+      categories: ev.categories ?? [],
+      is_starred: false,
+      event_media: ev.event_media ?? null,
+    });
+
+    checkedInEvents =
+      (rows ?? [])
+        .map((e: any) => ({
+          ...normalize(e),
+          checked_in_at: checkedAtMap.get(String(e.id)) as string, // keys normalized above
+        }))
+        .sort((a, b) => new Date(b.checked_in_at).getTime() - new Date(a.checked_in_at).getTime());
+  }
+
   // Load starred events (two-step for clarity/RLS-friendliness)
   const { data: starRows } = await supabase
     .from("event_stars")
@@ -40,7 +100,7 @@ export default async function ProfilePage() {
   const eventIds = (starRows ?? []).map(r => r.event_id);
 
   // move/define normalize here so we use it when mapping rows -> favoriteEvents
-  const normalize = (ev: any) => ({
+  const normalize2 = (ev: any) => ({
     id: ev.id,
     title: ev.title,
     starts_at: ev.starts_at,
@@ -86,7 +146,7 @@ export default async function ProfilePage() {
 
     // use normalize so is_starred and other normalized fields are present
     favoriteEvents = (rows ?? []).map((e: any) => {
-      const base = normalize(e);
+      const base = normalize2(e);
       return {
         ...base,
         vendor: e.vendors ? { id: e.vendors.id, name: e.vendors.name, slug: e.vendors.slug } : null,
@@ -101,29 +161,22 @@ export default async function ProfilePage() {
   return (
     <main className="px-4 pt-6">
       <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
-        {/* Header - moved to client component */}
         <ProfileHeader user={user} />
 
-        {/* Stats */}
-        <section className="grid grid-cols-2 gap-4">
-          <div className="rounded-xl border px-4 py-3 text-center">
-            <div className="text-xl font-semibold">{favoriteCount}</div>
-            <div className="text-xs text-gray-500">Favorites</div>
-          </div>
-          <div className="rounded-xl border px-4 py-3 text-center">
-            <div className="text-xl font-semibold">{remindedCount ?? 0}</div>
-            <div className="text-xs text-gray-500">Reminded</div>
-          </div>
-        </section>
+        {/* Stats → Favorites + Check-ins (replace Reminded) */}
+        <ProfileStats
+          favoriteCount={favoriteCount}
+          checkinCount={checkinCount ?? 0}
+          checkedInEvents={checkedInEvents}
+        />
 
         <section className="space-y-4">
-        {/* Admin Panel */}
-        {isAdmin && (
-          <section>
-            <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
-          </section>
-        )}
-        <SwitchViewButton />
+          {isAdmin && (
+            <section>
+              <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
+            </section>
+          )}
+          <SwitchViewButton />
         </section>
 
         <div className="divider"></div>

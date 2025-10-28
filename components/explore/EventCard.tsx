@@ -13,8 +13,9 @@ type Props = {
 };
 
 export default function EventCard({ card, onClick }: Props) {
-  // starts_at is string | null; guard it
+  // starts_at and ends_at are string | null; guard them
   const startDate = card.starts_at ? new Date(card.starts_at) : null;
+  const endDate = card.ends_at ? new Date(card.ends_at) : null;
 
   const formattedDate = startDate
     ? startDate.toLocaleString("en-US", {
@@ -33,6 +34,10 @@ export default function EventCard({ card, onClick }: Props) {
         hour12: true,
       })
     : null;
+
+  // Determine if the event is currently live
+  const now = new Date();
+  const isLive = startDate && endDate && now >= startDate && now <= endDate;
 
   return (
     <div
@@ -54,6 +59,9 @@ export default function EventCard({ card, onClick }: Props) {
         )}
         {card.is_past && (
           <span className="badge badge-neutral absolute left-2 top-2">PAST</span>
+        )}
+        {isLive && (
+          <span className="badge badge-success absolute right-2 top-2">LIVE NOW</span>
         )}
       </figure>
 
