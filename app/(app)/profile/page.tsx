@@ -8,6 +8,7 @@ import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import SwitchViewButton from "@/components/profile/SwitchViewButton";
 import ProfileStats from "@/components/profile/ProfileStats";
+import BadgeRow from "@/components/profile/BadgeRow";
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServer();
@@ -154,6 +155,14 @@ export default async function ProfilePage() {
     });
   }
 
+  // Fetch badge progress (3 rows expected)
+  const { data: badgeRows } = await supabase
+    .from("v_user_badges")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("badge_id", { ascending: true })
+    .limit(3);
+
   const favoriteCount = favoriteEvents.length;
   const initials = (user.user_metadata?.name || user.email || "?")
     .split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -163,21 +172,26 @@ export default async function ProfilePage() {
       <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
         <ProfileHeader user={user} />
 
-        {/* Stats → Favorites + Check-ins (replace Reminded) */}
         <ProfileStats
           favoriteCount={favoriteCount}
           checkinCount={checkinCount ?? 0}
           checkedInEvents={checkedInEvents}
         />
 
-        <section className="space-y-4">
-          {isAdmin && (
-            <section>
-              <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
+        {/* Badges row: replace controls for non-admin; below controls for admin */}
+        {isAdmin ? (
+          <>
+            <section className="space-y-4">
+              <section>
+                <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
+              </section>
+              <SwitchViewButton />
             </section>
-          )}
-          <SwitchViewButton />
-        </section>
+            <BadgeRow badges={badgeRows ?? []} />
+          </>
+        ) : (
+          <BadgeRow badges={badgeRows ?? []} />
+        )}
 
         <div className="divider"></div>
 

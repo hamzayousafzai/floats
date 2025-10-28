@@ -1,7 +1,4 @@
-// FIX: This layout uses hooks, so it must be a client component.
 "use client";
-
-// FIX: Import the BottomNav component
 import BottomNav from "@/components/nav/BottomNav";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,8 +8,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto pb-20">
         {children}
       </main>
-
-      {/* FIX: Replace the old DaisyUI dock with the BottomNav component */}
       <BottomNav />
     </div>
   );

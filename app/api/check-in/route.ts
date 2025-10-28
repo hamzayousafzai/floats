@@ -24,16 +24,6 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ code: "unknown_error" }, { status: 400 });
 
-  if (DEBUG) {
-    console.log("[check-in][GET] status", {
-      user_id: user.id,
-      event_id,
-      found: !!data,
-      checked_at: data?.checked_at,
-      distance_m: data?.distance_m,
-    });
-  }
-
   return NextResponse.json({
     checked: !!data,
     checked_at: data?.checked_at ?? null,
