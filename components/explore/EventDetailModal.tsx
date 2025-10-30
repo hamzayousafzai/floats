@@ -127,10 +127,10 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
 
   const shareEvent = useCallback(async () => {
     if (!event?.id) return;
-    const url = `${window.location.origin}/events/${event.id}`;
+    // Append ?from=/explore to ensure a clean redirect on close for shared links
+    const url = `${window.location.origin}/events/${event.id}?from=/explore`;
     try {
       if (navigator.share) {
-        // MODIFIED: Only pass the URL to the Web Share API.
         await navigator.share({
           url,
         });
