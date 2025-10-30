@@ -130,9 +130,8 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     const url = `${window.location.origin}/events/${event.id}`;
     try {
       if (navigator.share) {
+        // MODIFIED: Only pass the URL to the Web Share API.
         await navigator.share({
-          title: event.title ?? "Event",
-          text: event.description ?? undefined,
           url,
         });
         return;
@@ -163,7 +162,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     } catch (err) {
       console.error("Share failed:", err);
     }
-  }, [event?.id, event?.title, event?.description]);
+  }, [event?.id]);
 
   // Helper function to format dates consistently in EST
   const formatEventTime = useCallback((dateString: string) => {
