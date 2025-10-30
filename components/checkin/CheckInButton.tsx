@@ -14,10 +14,19 @@ type Props = {
   startsAt?: string | null;
   endsAt?: string | null;
   autoRun?: boolean;
-  initialChecked?: boolean; // NEW
+  initialChecked?: boolean;
+  /** NEW: Callback to signal parent to close before redirecting */
+  onAuthRedirect?: (redirectAction: () => void) => void;
 };
 
-export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = false, initialChecked = false }: Props) {
+export default function CheckInButton({
+  eventId,
+  startsAt,
+  endsAt,
+  autoRun = false,
+  initialChecked = false,
+  onAuthRedirect, // <-- Destructure the new prop
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -118,7 +127,17 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
             const search = window.location.search;
             const returnTo = `${window.location.pathname}${search ? search + "&" : "?"}doCheckIn=1`;
             if (debugClient) console.debug("[check-in][client] not authenticated → redirecting", { returnTo });
-            router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+
+            const redirectAction = () => {
+              router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+            };
+
+            if (onAuthRedirect) {
+              onAuthRedirect(redirectAction);
+            } else {
+              redirectAction();
+            }
+
             setBusy(false);
             return;
           }
@@ -140,7 +159,17 @@ export default function CheckInButton({ eventId, startsAt, endsAt, autoRun = fal
             const search = window.location.search;
             const returnTo = `${window.location.pathname}${search ? search + "&" : "?"}doCheckIn=1`;
             if (debugClient) console.debug("[check-in][client] 401 → redirecting", { returnTo });
-            router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+            
+            const redirectAction = () => {
+              router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+            };
+
+            if (onAuthRedirect) {
+              onAuthRedirect(redirectAction);
+            } else {
+              redirectAction();
+            }
+
             setBusy(false);
             return;
           }

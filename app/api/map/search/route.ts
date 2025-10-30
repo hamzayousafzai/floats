@@ -1,19 +1,64 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { type EventPin } from "@/lib/types";
+import type { EventPin } from "@/lib/types";
+
+// miles → meters
+const MI = 1609.344;
+
+function bboxFromCenter(lat: number, lng: number, miles: number) {
+  const meters = miles * MI;
+  const dLat = (meters / 111_320); // ~ meters per deg latitude
+  const dLng = meters / (111_320 * Math.cos((lat * Math.PI) / 180));
+  return {
+    swLat: lat - dLat,
+    neLat: lat + dLat,
+    swLng: lng - dLng,
+    neLng: lng + dLng,
+  };
+}
+
+function timeWindow(when: string) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (when === "today") {
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+    return { start, end };
+  }
+  if (when === "this-week" || when === "week") {
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+    return { start, end };
+  }
+  // default: this-month (~30 days)
+  const end = new Date(start);
+  end.setDate(start.getDate() + 30);
+  return { start, end };
+}
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const bounds = searchParams.get("bounds");
-  const areaSlugs = searchParams.get("area_slugs")?.split(',');
-
   try {
+    const url = new URL(req.url);
+    const lat = Number(url.searchParams.get("lat"));
+    const lng = Number(url.searchParams.get("lng"));
+    const distanceMi = Number(url.searchParams.get("distance") ?? "5");
+    const when = url.searchParams.get("when") ?? "this-month";
+
+    if ([lat, lng].some((n) => Number.isNaN(n))) {
+      return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
+    }
+
+    const { swLat, neLat, swLng, neLng } = bboxFromCenter(lat, lng, distanceMi);
+    const { start, end } = timeWindow(when);
+
     const supabase = createSupabaseServer();
 
-    let query = supabase
-      .from('events')
-      .select(
-        `
+    // Prefer explicit latitude/longitude columns; fall back to geom only if needed.
+    const { data, error } = await supabase
+      .from("events")
+      .select(`
         id,
         title,
         description,
@@ -21,64 +66,61 @@ export async function GET(req: Request) {
         ends_at,
         image_url,
         address,
+        latitude,
+        longitude,
         geom,
-        org:org_id ( name, slug ),
-        series:series_id ( id, title )
-        `
-      )
-      // FIX: Use the correct 'published' status for all public-facing queries.
-      .eq('status', 'published')
-      .order('starts_at', { ascending: true });
-
-    if (bounds) {
-      const { ne, sw } = JSON.parse(bounds);
-      query = query.filter(
-        'geom',
-        'st_within',
-        `POLYGON((${ne.lng} ${ne.lat}, ${sw.lng} ${ne.lat}, ${sw.lng} ${sw.lat}, ${ne.lng} ${sw.lat}, ${ne.lng} ${ne.lat}))`
-      );
-    }
-
-    if (areaSlugs && areaSlugs.length > 0) {
-      query = query.filter('org.slug', 'in', `(${areaSlugs.join(',')})`);
-    }
-
-    const { data, error } = await query;
+        org:org_id ( name, slug )
+      `)
+      .eq("status", "published")
+      .gte("starts_at", start.toISOString())
+      .lt("starts_at", end.toISOString())
+      .gte("latitude", swLat)
+      .lte("latitude", neLat)
+      .gte("longitude", swLng)
+      .lte("longitude", neLng)
+      .order("starts_at", { ascending: true });
 
     if (error) {
       console.error("Map search error:", error);
-      throw new Error(error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // The geom column is a PostGIS point, e.g., "POINT(-80.8431 35.2271)"
-    // We need to parse it to get lat/lng for the map pins.
-    const eventsWithLatLng: EventPin[] = (data || []).map((event: any) => {
-      let lat = 0;
-      let lng = 0;
-      if (event.geom) {
-        const match = event.geom.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-        if (match) {
-          lng = parseFloat(match[1]);
-          lat = parseFloat(match[2]);
+    const pins: EventPin[] = (data ?? []).map((ev: any) => {
+      let latVal: number | null = ev.latitude ?? null;
+      let lngVal: number | null = ev.longitude ?? null;
+
+      // Fallback: try WKT POINT(lon lat) if PostgREST returns that format
+      if ((!latVal || !lngVal) && typeof ev.geom === "string" && ev.geom.startsWith("POINT(")) {
+        const m = ev.geom.match(/POINT\(([-\d.]+)\s+([-\d.]+)\)/);
+        if (m) {
+          lngVal = parseFloat(m[1]);
+          latVal = parseFloat(m[2]);
         }
       }
+
+      if (latVal == null || lngVal == null) {
+        // Skip rows without usable coordinates
+        return null as unknown as EventPin;
+      }
+
       return {
-        id: event.id,
-        title: event.title,
-        description: event.description,
-        starts_at: event.starts_at,
-        ends_at: event.ends_at,
-        address: event.address,
-        vendorName: event.org?.name,
-        vendorSlug: event.org?.slug,
-        lat,
-        lng,
+        id: ev.id,
+        vendorSlug: ev.org?.slug ?? "",
+        vendorName: ev.org?.name ?? "",
+        title: ev.title ?? null,
+        description: ev.description ?? null,
+        starts_at: ev.starts_at ?? null,
+        ends_at: ev.ends_at ?? null,
+        address: ev.address ?? null,
+        lat: latVal,
+        lng: lngVal,
+        imageUrl: ev.image_url ?? null,
       };
-    });
+    }).filter(Boolean);
 
-    return NextResponse.json(eventsWithLatLng);
-
+    return NextResponse.json(pins);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("Map search failure:", e);
+    return NextResponse.json({ error: e.message ?? "Unknown error" }, { status: 500 });
   }
 }

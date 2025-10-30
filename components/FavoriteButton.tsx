@@ -17,6 +17,8 @@ export type FavoriteButtonProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
   onChange?: (starred: boolean) => void;
+  /** NEW: Receives a function that will perform the redirect. */
+  onAuthRedirect?: (redirectAction: () => void) => void;
 };
 
 export default memo(function FavoriteButton({
@@ -28,6 +30,7 @@ export default memo(function FavoriteButton({
   size = "md",
   className = "",
   onChange,
+  onAuthRedirect,
 }: FavoriteButtonProps) {
   const supabase = createSupabaseBrowserClient();
   const router = useRouter();
@@ -82,8 +85,19 @@ export default memo(function FavoriteButton({
   const toggle = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
-      router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      // Define the redirect action
+      const redirectAction = () => {
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      };
+
+      // If the parent provided the onAuthRedirect handler, use it.
+      // Otherwise, fall back to immediate redirection.
+      if (onAuthRedirect) {
+        onAuthRedirect(redirectAction);
+      } else {
+        redirectAction();
+      }
       return;
     }
 
@@ -125,7 +139,7 @@ export default memo(function FavoriteButton({
     } finally {
       setLoading(false);
     }
-  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange, router]);
+  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange, router, onAuthRedirect]);
 
   const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "btn-md";
 

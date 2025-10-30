@@ -1,11 +1,12 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useCallback, useState } from "react"; // Import useState
+import { useCallback } from "react"; // removed useState
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
-import EventDetailModal from "./EventDetailModal";
+// Removed local modal import
+// import EventDetailModal from "./EventDetailModal";
 import FeaturedCarousel from "./FeaturedCarousel";
 import { FeaturedCardData } from "./FeaturedEventCard";
 
@@ -27,9 +28,9 @@ export default function ExploreView({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // State to manage which event is shown in the modal
-  const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
+
+  // Removed local selectedEvent state that created a second modal
+  // const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
 
   const currentFilters = {
     search: searchParams.get("search") || "",
@@ -38,7 +39,6 @@ export default function ExploreView({
     categories: new Set(searchParams.get("categories")?.split(",").filter(Boolean) ?? []),
   };
 
-  // Wrap the handler in useCallback to stabilize its reference
   const handleFilterChange = useCallback(
     (
       filterType: "search" | "when" | "areas" | "categories",
@@ -47,27 +47,20 @@ export default function ExploreView({
       const params = new URLSearchParams(searchParams);
 
       if (typeof value === "string") {
-        if (value) {
-          params.set(filterType, value);
-        } else {
-          params.delete(filterType);
-        }
+        value ? params.set(filterType, value) : params.delete(filterType);
       } else {
-        if (value.size > 0) {
-          params.set(filterType, Array.from(value).join(","));
-        } else {
-          params.delete(filterType);
-        }
+        value.size > 0
+          ? params.set(filterType, Array.from(value).join(","))
+          : params.delete(filterType);
       }
 
       router.push(`/explore?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams] // Dependencies for the callback
+    [router, searchParams]
   );
 
   return (
-    <div className="flex flex-col h-full bg-base-200">  {/* Changed from default to bg-base-200 */}
-
+    <div className="flex flex-col h-full bg-base-200">
       <ExploreFilters
         currentFilters={currentFilters}
         onFilterChange={handleFilterChange}
@@ -76,19 +69,19 @@ export default function ExploreView({
       />
 
       <main className="flex-1 overflow-y-auto p-4">
-
         <FeaturedCarousel
-        featuredCards={featuredCards}
-        onCardClick={setSelectedEvent}
+          featuredCards={featuredCards}
+          // Route to canonical event URL instead of opening a local modal
+          onCardClick={(card) => router.push(`/events/${card.id}`)}
         />
+
         {initialCards.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {initialCards.map((card) => (
-              // Pass an onClick handler to set the selected event
               <EventCard
                 key={card.id}
                 card={card}
-                onClick={() => setSelectedEvent(card)}
+                onClick={() => router.push(`/events/${card.id}`)} // route navigation
               />
             ))}
           </div>
@@ -100,11 +93,13 @@ export default function ExploreView({
         )}
       </main>
 
-      {/* Render the modal and control it with state */}
+      {/* Removed local EventDetailModal which conflicted with intercepted modal */}
+      {/*       
       <EventDetailModal
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
       />
+      */}
     </div>
   );
 }

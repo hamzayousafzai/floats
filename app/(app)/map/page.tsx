@@ -6,23 +6,14 @@ import MapCanvas from "@/components/map/MapCanvas";
 import EventDetailModal from "@/components/explore/EventDetailModal";
 import { type ExploreCardData } from "@/components/explore/EventCard";
 import { type EventPin } from "@/lib/types";
+import { useRouter } from "next/navigation";
 
 export default function MapPage() {
+  const router = useRouter();
   const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
 
   const handlePinClick = (pin: EventPin) => {
-    const cardData: ExploreCardData = {
-      id: pin.id,
-      image_url: (pin as any).imageUrl ?? null,
-      title: (pin.title ?? "") as string,
-      starts_at: (pin as any).starts_at ?? null,
-      address: (pin as any).address ?? "",
-      latitude: (pin.lat ?? null) as number | null,
-      longitude: (pin.lng ?? null) as number | null,
-      description: (pin as any).description ?? null,
-      categories: (pin as any).categories ?? [],
-    };
-    setSelectedEvent(cardData);
+    router.push(`/events/${pin.id}`);
   };
 
   const closeModal = () => {

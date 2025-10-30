@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ExploreCardData } from "@/lib/types";
 import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "@/components/FavoriteButton";
 import NotificationBell from "@/components/NotificationBell";
 import CheckInButton from "@/components/checkin/CheckInButton";
-import { useSearchParams } from "next/navigation";
 
 type Props = {
   event: ExploreCardData | null;
@@ -16,6 +17,43 @@ type Props = {
 };
 
 export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null); // Create a ref for the dialog
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+  const searchParams = useSearchParams();
+
+  // This effect imperatively controls the dialog's visibility
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (event) {
+      // If there's an event and the dialog isn't already open, show it.
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    } else {
+      // If there's no event and the dialog is open, close it.
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+  }, [event]); // This effect runs whenever the `event` prop changes
+
+  const handleAuthRedirect = (redirectAction: () => void) => {
+    // This function will be passed to the FavoriteButton.
+    // It closes the dialog imperatively, then executes the redirect.
+    const dialog = dialogRef.current;
+    if (dialog && dialog.open) {
+      dialog.close();
+      // We wait for the 'close' event on the dialog before redirecting.
+      dialog.addEventListener('close', redirectAction, { once: true });
+    } else {
+      // If for some reason the dialog isn't open, just redirect immediately.
+      redirectAction();
+    }
+  };
+
   const [starred, setStarred] = useState<boolean>(event?.is_starred ?? false);
   const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
   const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
@@ -23,7 +61,6 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   const [alreadyChecked, setAlreadyChecked] = useState(false); // NEW
 
   const fetchedKey = useRef<string | null>(null);
-  const searchParams = useSearchParams();
 
   // Memoize the sorted images array
   const sortedImages = useMemo(() => {
@@ -221,12 +258,13 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
   }, [event?.id]);
 
   return (
-    <dialog id="event_modal" className="modal" open={!!event}>
+    // Remove the `open` prop and add the `ref` and `onClose` handler
+    <dialog ref={dialogRef} className="modal" onClose={onClose}>
       {event && (
         <div className="modal-box border border-base-300 bg-base-300">
-          {/* Wrap the close button in a form with method="dialog" */}
+          {/* The form with method="dialog" is correct and should stay */}
           <form method="dialog">
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
+            <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
           </form>
 
           {sortedImages.length > 0 && (
@@ -286,6 +324,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
                 variant="pill"
                 size="md"
                 onChange={handleFavoriteChange}
+                onAuthRedirect={handleAuthRedirect} // Pass the new handler
               />
             </div>
           </div>
@@ -336,8 +375,8 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
           </div>
         </div>
       )}
-      {/* This form handles the backdrop click to close */}
-      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+      {/* This form for backdrop click is also correct and should stay */}
+      <form method="dialog" className="modal-backdrop"><button>close</button></form>
     </dialog>
   );
 }

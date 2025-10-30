@@ -36,7 +36,7 @@ export type ExploreCardData = {
   latitude?: number | null;
   longitude?: number | null;
   description?: string | null;
-  categories: string[];
+  categories: string[] ;
   is_starred?: boolean;
   is_notified?: boolean;
   is_series_followed?: boolean;
