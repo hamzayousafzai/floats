@@ -19,6 +19,7 @@ export type FavoriteButtonProps = {
   onChange?: (starred: boolean) => void;
   /** NEW: Receives a function that will perform the redirect. */
   onAuthRedirect?: (redirectAction: () => void) => void;
+  disabled?: boolean; // Add disabled prop
 };
 
 export default memo(function FavoriteButton({
@@ -31,6 +32,7 @@ export default memo(function FavoriteButton({
   className = "",
   onChange,
   onAuthRedirect,
+  disabled = false, // Destructure and default
 }: FavoriteButtonProps) {
   const supabase = createSupabaseBrowserClient();
   const router = useRouter();
@@ -149,12 +151,12 @@ export default memo(function FavoriteButton({
       <button
         type="button"
         onClick={toggle}
-        disabled={loading}
-        aria-label={starred ? "Unfavorite" : "Favorite"}
-        className={`btn btn-ghost ${sizeClass} ${className}`}
-        title={starred ? "Unfavorite" : "Favorite"}
+        disabled={loading || disabled} // Apply disabled prop here
+        aria-pressed={starred}
+        className={`btn btn-ghost btn-circle ${sizeClass} ${className}`}
+        title={starred ? "Favorited" : "Favorite"}
       >
-        <span className="text-lg">{starred ? "★" : "☆"}</span>
+        <span className="text-lg leading-none">{starred ? "★" : "☆"}</span>
       </button>
     );
   }
@@ -164,7 +166,7 @@ export default memo(function FavoriteButton({
     <button
       type="button"
       onClick={toggle}
-      disabled={loading}
+      disabled={loading || disabled} // Apply disabled prop here
       aria-pressed={starred}
       className={`btn ${starred ? "btn-primary" : "btn-outline"} ${sizeClass} ${className}`}
       title={starred ? "Favorited" : "Favorite"}

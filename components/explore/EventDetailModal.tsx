@@ -6,17 +6,18 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ExploreCardData } from "@/lib/types";
 import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
-import FavoriteButton from "@/components/FavoriteButton";
-import NotificationBell from "@/components/NotificationBell";
+import FavoriteButton from "../FavoriteButton";
+import NotificationBell from "../NotificationBell";
 import CheckInButton from "@/components/checkin/CheckInButton";
 
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
   onCardChange?: (id: string, patch: Partial<ExploreCardData>) => void;
+  isPreview?: boolean; // Add isPreview prop
 };
 
-export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
+export default function EventDetailModal({ event, onClose, onCardChange, isPreview = false }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null); // Create a ref for the dialog
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
@@ -297,80 +298,77 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
             </figure>
           )}
 
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-lg">{event.title}</h3>
+          <div className="p-4">
+            <div className="flex items-start">
+              <h3 className="text-xl font-bold mb-2 flex-1">{event.title}</h3>
+              <div className="flex items-center gap-3 ml-auto">
+                <NotificationBell
+                  eventId={event.id}
+                  seriesId={event.series_id}
+                  visible={starred} // <-- ADD THIS: Show the bell only when starred
+                  initialNotified={notified}
+                  initialFollowing={following}
+                  onNotifyChange={handleNotifyChange} // <-- FIX THIS: Use the correct callback
+                  onFollowChange={handleFollowChange} // <-- ADD THIS: Pass the follow callback
+                />
+                <FavoriteButton
+                  eventId={event.id}
+                  seriesId={event.series_id ?? null}
+                  startsAt={event.starts_at ?? null}
+                  initialStarred={starred}
+                  variant="pill"
+                  size="md"
+                  onChange={handleFavoriteChange}
+                  onAuthRedirect={handleAuthRedirect}
+                  disabled={isPreview} // Disable if in preview mode
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 ml-auto">
-              <NotificationBell
-                key={event.id}                 // ensure a clean mount per event
-                eventId={event.id}
-                seriesId={event.series_id ?? null}
-                visible={Boolean(starred)}
-                initialNotified={notified}     // optional: pass if your Bell supports it
-                initialFollowing={following}   // optional
-                className="mr-1"
-                onNotifyChange={handleNotifyChange}
-                onFollowChange={handleFollowChange}
-              />
+            {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
 
-              <FavoriteButton
-                eventId={event.id}
-                seriesId={event.series_id ?? null}
-                startsAt={event.starts_at ?? null}
-                initialStarred={event.is_starred ?? undefined}
-                variant="pill"
-                size="md"
-                onChange={handleFavoriteChange}
-                onAuthRedirect={handleAuthRedirect} // Pass the new handler
-              />
-            </div>
-          </div>
-
-          {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
-
-          <div className="mt-2 space-y-2 text-sm">
-            {event.starts_at && (
+            <div className="mt-2 space-y-2 text-sm">
+              {event.starts_at && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+                <MapPin className="h-4 w-4 text-gray-500" />
+                <span>{event.address}</span>
+              </div>
+            </div>
+
+            {/* Primary CTA: full-width Check In */}
+            {event.starts_at && (
+              <div className="mt-4">
+                <CheckInButton
+                  eventId={event.id}
+                  startsAt={event.starts_at}
+                  endsAt={event.ends_at ?? null}
+                  autoRun={searchParams.get("doCheckIn") === "1"}
+                  initialChecked={alreadyChecked} // NEW
+                />
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-gray-500" />
-              <span>{event.address}</span>
-            </div>
-          </div>
 
-          {/* Primary CTA: full-width Check In */}
-          {event.starts_at && (
-            <div className="mt-4">
-              <CheckInButton
-                eventId={event.id}
-                startsAt={event.starts_at}
-                endsAt={event.ends_at ?? null}
-                autoRun={searchParams.get("doCheckIn") === "1"}
-                initialChecked={alreadyChecked} // NEW
-              />
-            </div>
-          )}
+            {/* Secondary actions */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
+              {canGetDirections && (
+                <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                  <Navigation className="h-4 w-4" /> Get Directions
+                </a>
+              )}
 
-          {/* Secondary actions */}
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
-            {canGetDirections && (
-              <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                <Navigation className="h-4 w-4" /> Get Directions
+              <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
+                <Download className="h-4 w-4" /> Add to Calendar
               </a>
-            )}
 
-            <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
-              <Download className="h-4 w-4" /> Add to Calendar
-            </a>
-
-            <button type="button" onClick={shareEvent} className="btn btn-outline">
-              <Share2 className="h-4 w-4" /> Share
-            </button>
+              <button type="button" onClick={shareEvent} className="btn btn-outline">
+                <Share2 className="h-4 w-4" /> Share
+              </button>
+            </div>
           </div>
         </div>
       )}

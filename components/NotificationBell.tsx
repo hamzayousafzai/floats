@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 export type NotificationBellProps = {
   eventId: string;
@@ -29,6 +31,7 @@ export default function NotificationBell({
   const [notified, setNotified] = useState<boolean>(initialNotified);
   const [following, setFollowing] = useState<boolean>(initialFollowing);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setNotified(initialNotified);
@@ -106,6 +109,13 @@ export default function NotificationBell({
     [notified, toggleEventNotify, toggleSeriesFollow]
   );
 
+  // FIX: This function should not query the database.
+  // It should just call toggleEventNotify with the opposite of the current state.
+  const toggle = useCallback(async () => {
+    if (loading) return;
+    await toggleEventNotify(!notified);
+  }, [loading, notified, toggleEventNotify]);
+
   if (!visible) return null;
 
   // Single event: icon-only direct toggle, no dropdown
@@ -115,7 +125,7 @@ export default function NotificationBell({
         type="button"
         aria-label={notified ? "Notifications on" : "Notifications off"}
         className={`btn btn-ghost btn-xs btn-square p-0 ${loading ? "opacity-60" : ""} ${className}`}
-        onClick={() => toggleEventNotify(!notified)}
+        onClick={toggle}
       >
         {notified ? <Bell className="w-4 h-4 text-amber-500" /> : <BellOff className="w-4 h-4 text-gray-400" />}
       </button>
