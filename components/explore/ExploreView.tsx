@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCallback } from "react"; // removed useState
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
@@ -27,6 +27,7 @@ export default function ExploreView({
   availableCategories,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname(); // Get the current path, e.g., "/explore"
   const searchParams = useSearchParams();
 
   // Removed local selectedEvent state that created a second modal
@@ -71,8 +72,8 @@ export default function ExploreView({
       <main className="flex-1 overflow-y-auto p-4">
         <FeaturedCarousel
           featuredCards={featuredCards}
-          // Route to canonical event URL instead of opening a local modal
-          onCardClick={(card) => router.push(`/events/${card.id}`)}
+          // Append the current path
+          onCardClick={(card) => router.push(`/events/${card.id}?from=${pathname}`)}
         />
 
         {initialCards.length > 0 ? (
@@ -81,7 +82,8 @@ export default function ExploreView({
               <EventCard
                 key={card.id}
                 card={card}
-                onClick={() => router.push(`/events/${card.id}`)} // route navigation
+                // Append the current path
+                onClick={() => router.push(`/events/${card.id}?from=${pathname}`)}
               />
             ))}
           </div>

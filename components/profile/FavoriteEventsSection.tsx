@@ -12,43 +12,28 @@ type Props = { events: Array<any> };
 type ActionCard = { id: "__view_past__", type: "action"; label?: string };
 
 export default function FavoriteEventsSection({ events }: Props) {
-  const [cards, setCards] = useState<ExploreCardData[]>(
-    () =>
-      events.map((e: any) => ({
-        id: String(e.id),
-        title: e.title ?? "",
-        starts_at: e.starts_at ?? null,
-        image_url: e.image_url ?? null,
-        description: e.description ?? null,
-        address: e.address ?? null,
-        latitude: e.latitude ?? null,
-        longitude: e.longitude ?? null,
-        categories: Array.isArray(e.categories) ? e.categories : [],
-        is_starred: !!e.is_starred,
-        series_id: e.series_id ?? null,
-        event_media: e.event_media ?? null,
-        // NEW: computed below in a useEffect so initial render stays the same
-      }))
-  );
+  const mapEventToCard = (e: any): ExploreCardData => ({
+    id: String(e.id),
+    title: e.title ?? "",
+    starts_at: e.starts_at ?? null,
+    image_url: e.image_url ?? null,
+    description: e.description ?? null,
+    address: e.address ?? null,
+    latitude: e.latitude ?? null,
+    longitude: e.longitude ?? null,
+    categories: Array.isArray(e.categories) ? e.categories : [],
+    is_starred: !!e.is_starred,
+    // NEW: Pass the notification status from the server
+    is_notified: !!e.is_notified,
+    series_id: e.series_id ?? null,
+    event_media: e.event_media ?? null,
+  });
 
-  // sync when incoming events prop changes (server refresh)
+  const [cards, setCards] = useState<ExploreCardData[]>(() => events.map(mapEventToCard));
+
+  // sync when incoming events prop changes
   useEffect(() => {
-    setCards(
-      events.map((e: any) => ({
-        id: String(e.id),
-        title: e.title ?? "",
-        starts_at: e.starts_at ?? null,
-        image_url: e.image_url ?? null,
-        description: e.description ?? null,
-        address: e.address ?? null,
-        latitude: e.latitude ?? null,
-        longitude: e.longitude ?? null,
-        categories: Array.isArray(e.categories) ? e.categories : [],
-        is_starred: !!e.is_starred,
-        series_id: e.series_id ?? null,
-        event_media: e.event_media ?? null,
-      }))
-    );
+    setCards(events.map(mapEventToCard));
   }, [events]);
 
   // NEW: compute is_past once per changes
@@ -144,8 +129,8 @@ export default function FavoriteEventsSection({ events }: Props) {
       {activeEvent && (
         <EventDetailModal
           event={activeEvent}
-          onClose={() => setActiveEvent(null)} // Past modal remains open
-          onCardChange={(id, patch) => updateCard(id, patch)}
+          onClose={() => setActiveEvent(null)}
+          onCardChange={updateCard} // Changed to pass the function directly
         />
       )}
     </>

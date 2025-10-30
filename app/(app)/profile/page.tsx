@@ -100,6 +100,15 @@ export default async function ProfilePage() {
 
   const eventIds = (starRows ?? []).map(r => r.event_id);
 
+  // NEW: Fetch all event notification statuses for the user
+  const { data: notificationRows } = await supabase
+    .from("event_notifications")
+    .select("event_id")
+    .eq("user_id", user.id)
+    .eq("notify", true);
+
+  const notifiedEventIds = new Set(notificationRows?.map(r => r.event_id) ?? []);
+
   // move/define normalize here so we use it when mapping rows -> favoriteEvents
   const normalize2 = (ev: any) => ({
     id: ev.id,
@@ -116,23 +125,11 @@ export default async function ProfilePage() {
     is_starred: true,
     // Add event_media to the normalized object
     event_media: ev.event_media ?? null,
+    // NEW: Check if the event ID is in our set of notified events
+    is_notified: notifiedEventIds.has(ev.id),
   });
 
-  let favoriteEvents: Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    starts_at: string;
-    ends_at: string | null;
-    address: string | null;
-    image_url: string | null;
-    // Add the event_media type here
-    event_media: { image_url: string; sort_index: number }[] | null;
-    latitude: number | null;
-    longitude: number | null;
-    series_id: string | null;
-    vendor: { id: string; name: string; slug: string | null } | null;
-  }> = [];
+  let favoriteEvents: Array<any> = []; // Type is complex, `any` is fine here
 
   if (eventIds.length) {
     const { data: rows } = await supabase
@@ -145,7 +142,6 @@ export default async function ProfilePage() {
       `)
       .in("id", eventIds);
 
-    // use normalize so is_starred and other normalized fields are present
     favoriteEvents = (rows ?? []).map((e: any) => {
       const base = normalize2(e);
       return {
