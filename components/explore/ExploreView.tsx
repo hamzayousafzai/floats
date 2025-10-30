@@ -83,7 +83,7 @@ export default function ExploreView({
                 key={card.id}
                 card={card}
                 // Append the current path
-                onClick={() => router.push(`/events/${card.id}?from=${pathname}`)}
+                onClick={() => router.push(`/events/${card.id}`)}
               />
             ))}
           </div>
