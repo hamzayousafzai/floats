@@ -1,12 +1,10 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback } from "react"; // removed useState
+import { useCallback, useRef, useEffect } from "react"; // Import useRef and useEffect
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
-// Removed local modal import
-// import EventDetailModal from "./EventDetailModal";
 import FeaturedCarousel from "./FeaturedCarousel";
 import { FeaturedCardData } from "./FeaturedEventCard";
 
@@ -20,6 +18,8 @@ type Props = {
   availableCategories: Category[];
 };
 
+const SCROLL_STORAGE_KEY = "exploreScrollPos";
+
 export default function ExploreView({
   featuredCards,
   initialCards,
@@ -27,17 +27,38 @@ export default function ExploreView({
   availableCategories,
 }: Props) {
   const router = useRouter();
-  const pathname = usePathname(); // Get the current path, e.g., "/explore"
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const scrollContainerRef = useRef<HTMLElement>(null); // Ref for the scrollable main element
 
-  // Removed local selectedEvent state that created a second modal
-  // const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
+  // Restore scroll position on component mount/re-render
+  useEffect(() => {
+    const savedPos = sessionStorage.getItem(SCROLL_STORAGE_KEY);
+    if (savedPos && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = parseInt(savedPos, 10);
+      // Optional: remove the item after restoring to prevent it from being used again on a fresh page load
+      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
+    }
+  }, []); // Empty dependency array ensures this runs only when the component mounts
+
+  const handleCardClick = (cardId: string) => {
+    // Save the current scroll position before navigating
+    if (scrollContainerRef.current) {
+      sessionStorage.setItem(
+        SCROLL_STORAGE_KEY,
+        scrollContainerRef.current.scrollTop.toString()
+      );
+    }
+    router.push(`/events/${cardId}?from=${pathname}`);
+  };
 
   const currentFilters = {
     search: searchParams.get("search") || "",
     when: searchParams.get("when") || "anytime",
     areas: new Set(searchParams.get("areas")?.split(",").filter(Boolean) ?? []),
-    categories: new Set(searchParams.get("categories")?.split(",").filter(Boolean) ?? []),
+    categories: new Set(
+      searchParams.get("categories")?.split(",").filter(Boolean) ?? []
+    ),
   };
 
   const handleFilterChange = useCallback(
@@ -69,11 +90,11 @@ export default function ExploreView({
         availableCategories={availableCategories}
       />
 
-      <main className="flex-1 overflow-y-auto p-4">
+      {/* Attach the ref to your scrollable main element */}
+      <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
         <FeaturedCarousel
           featuredCards={featuredCards}
-          // Append the current path
-          onCardClick={(card) => router.push(`/events/${card.id}?from=${pathname}`)}
+          onCardClick={(card) => handleCardClick(card.id)}
         />
 
         {initialCards.length > 0 ? (
@@ -82,8 +103,7 @@ export default function ExploreView({
               <EventCard
                 key={card.id}
                 card={card}
-                // Append the current path
-                onClick={() => router.push(`/events/${card.id}`)}
+                onClick={() => handleCardClick(card.id)}
               />
             ))}
           </div>
@@ -94,14 +114,6 @@ export default function ExploreView({
           </div>
         )}
       </main>
-
-      {/* Removed local EventDetailModal which conflicted with intercepted modal */}
-      {/*       
-      <EventDetailModal
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-      />
-      */}
     </div>
   );
 }

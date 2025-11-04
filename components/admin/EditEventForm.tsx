@@ -34,8 +34,8 @@ const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | n
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type MediaRow = Database["public"]["Tables"]["event_media"]["Row"];
-// FIX: Change category id type to string to match parent pages
 type Category = { id: string; name: string; };
+type Org = Database["public"]["Tables"]["orgs"]["Row"]; // Add Org type
 
 // --- MODIFIED: Add role to Props ---
 type Props = {
@@ -45,6 +45,7 @@ type Props = {
   // FIX: Change currentCategoryIds to expect a Set of strings
   currentCategoryIds?: Set<string>;
   role?: Database['public']['Enums']['org_role'] | 'admin' | null; // Add role prop
+  orgs?: Org[]; // Add orgs prop
 };
 
 // Define a new type for the media items in the form state
@@ -73,7 +74,7 @@ type FormState = {
 
 const TZ = "America/New_York";
 
-export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role }: Props) {
+export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role, orgs = [] }: Props) {
   const router = useRouter();
   const isEditing = !!event;
 
@@ -340,6 +341,29 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             required
           />
         </div>
+
+        {/* Organization Dropdown - Conditionally rendered for platform admins */}
+        {role === "admin" && orgs.length > 0 && (
+          <div>
+            <label htmlFor="org_id" className="block text-sm font-medium mb-1">
+              Organization
+            </label>
+            <select
+              id="org_id"
+              name="org_id"
+              defaultValue={event?.org_id ?? ""}
+              className="select select-bordered w-full"
+              required
+            >
+              <option value="" disabled>Select an organization</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Description */}
         <div>

@@ -348,7 +348,9 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
                   startsAt={event.starts_at}
                   endsAt={event.ends_at ?? null}
                   autoRun={searchParams.get("doCheckIn") === "1"}
-                  initialChecked={alreadyChecked} // NEW
+                  initialChecked={alreadyChecked}
+                  disabled={isPreview} // Pass the isPreview prop as disabled
+                  onAuthRedirect={handleAuthRedirect} // Pass the auth redirect handler
                 />
               </div>
             )}

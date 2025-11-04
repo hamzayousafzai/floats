@@ -39,7 +39,8 @@ export default function SwitchViewButton() {
         <span>Switch View</span>
         <ChevronDown size={16} />
       </label>
-      <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full">
+      {/* FIX: Add max-height and overflow-y-auto to make the dropdown scrollable */}
+      <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full max-h-72 overflow-y-auto">
         <li className="menu-title"><span>Your Organizations</span></li>
         {userOrgs.map(org => (
           // The key error is resolved because the data from the view is now deduplicated
@@ -50,8 +51,8 @@ export default function SwitchViewButton() {
                   <Building size={16} />
                   {org.name}
                 </span>
-                {/* This now correctly displays the lowercase role */}
-                <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm`}>{org.role}</span>
+                {/* FIX: Add a left margin (ml-4) to create space */}
+                <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm ml-4`}>{org.role}</span>
               </div>
             </a>
           </li>

@@ -25,6 +25,19 @@ export default function AdminHome() {
           </Link>
         </div>
       </div>
+
+      {/* Add the Organization Management card */}
+      <div className="border rounded-lg p-4">
+        <h3 className="font-medium">Organization Management</h3>
+        <p className="text-sm text-gray-500 mt-1">
+          View and manage all organizations on the platform.
+        </p>
+        <div className="mt-4">
+          <Link href="/admin/orgs" className="rounded bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200">
+            Manage Organizations
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

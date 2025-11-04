@@ -15,8 +15,8 @@ type Props = {
   endsAt?: string | null;
   autoRun?: boolean;
   initialChecked?: boolean;
-  /** NEW: Callback to signal parent to close before redirecting */
   onAuthRedirect?: (redirectAction: () => void) => void;
+  disabled?: boolean; // Add disabled prop
 };
 
 export default function CheckInButton({
@@ -25,7 +25,8 @@ export default function CheckInButton({
   endsAt,
   autoRun = false,
   initialChecked = false,
-  onAuthRedirect, // <-- Destructure the new prop
+  onAuthRedirect,
+  disabled = false, // Destructure and default the disabled prop
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -231,7 +232,7 @@ export default function CheckInButton({
       : null;
 
   function onClickCheckedSafe() {
-    if (busy || isChecked) return; // JS guard (keyboard + mouse)
+    if (busy || isChecked || disabled) return; // Add disabled check here
     submit();
   }
 
@@ -240,10 +241,10 @@ export default function CheckInButton({
       <button
         type="button"
         onClick={onClickCheckedSafe}
-        // Only disable when busy to keep DaisyUI from greying the success state
-        disabled={busy}
-        aria-disabled={isChecked ? true : undefined}
-        tabIndex={isChecked ? -1 : undefined}
+        // Combine busy and disabled states
+        disabled={busy || disabled}
+        aria-disabled={isChecked || disabled ? true : undefined}
+        tabIndex={isChecked || disabled ? -1 : undefined}
         className={
           "btn w-full " +
           (isChecked
