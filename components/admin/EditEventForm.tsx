@@ -273,7 +273,16 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       if (!res.ok) throw new Error(result.error || "Submission failed");
 
       alert(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      router.push(`/host/${orgSlug}`);
+      
+      // --- THE FIX: Conditional Redirect ---
+      if (role === 'admin') {
+        // If the user is a global admin, redirect to the admin events page.
+        router.push('/admin/events');
+      } else {
+        // Otherwise, use the existing logic for host users.
+        router.push(`/host/${orgSlug}`);
+      }
+      
       router.refresh();
 
     } catch (err: any) {

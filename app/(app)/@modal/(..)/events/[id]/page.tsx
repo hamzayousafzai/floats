@@ -41,6 +41,5 @@ export default async function InterceptedEventModal({
     (event as any).is_starred = !!starRes.data;
     (event as any).is_notified = notificationRes.data?.notify ?? false;
   }
-
   return <ModalPresenter event={event as any} />;
 }

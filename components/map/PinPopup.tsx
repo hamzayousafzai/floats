@@ -111,24 +111,14 @@ export function createPinPopupContent(pin: PinData): HTMLElement {
 
   if (pin.title) {
     const titleEl = document.createElement("p");
-    titleEl.className = "text-xs text-gray-700";
+    // Make the title more prominent
+    titleEl.className = "text-sm font-semibold text-gray-800";
     titleEl.textContent = pin.title;
     content.appendChild(titleEl);
   }
 
-  if (pin.vendorName && pin.vendorSlug) {
-    const vendorLink = document.createElement("a");
-    vendorLink.href = `/vendor/${pin.vendorSlug}`;
-    vendorLink.className = "text-sm font-semibold hover:underline block"; // Added 'block' for better layout
-    vendorLink.textContent = pin.vendorName;
-    content.appendChild(vendorLink);
-  }
-
-  // Add the description element
-  // const descriptionEl = document.createElement("p");
-  // descriptionEl.className = "text-xs text-gray-600 mt-1";
-  // descriptionEl.textContent = pin.description || "";
-  // content.appendChild(descriptionEl);
+  // Remove the vendor name link
+  // if (pin.vendorName && pin.vendorSlug) { ... }
 
   const timeEl = document.createElement("p");
   timeEl.className = "text-xs text-gray-500";

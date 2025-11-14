@@ -7,15 +7,9 @@ type SearchParams = { from?: string };
 
 export const revalidate = 0;
 
-// This page no longer needs to load event data.
-// Its only job is to render the correct background for a direct navigation.
-export default async function EventPage({ searchParams }: { params: Promise<Params>, searchParams: Promise<SearchParams> }) {
-  const { from } = await searchParams;
-
-  // Conditionally render the background based on the 'from' query parameter.
-  const background = from === '/map' 
-    ? <MapPage /> 
-    : <ExplorePage searchParams={Promise.resolve({})} />;
-
-  return background;
+// This page is now just a placeholder for the route.
+// It should not render any UI, allowing the intercepted route to work
+// without replacing the background content.
+export default function EventPage() {
+  return null;
 }

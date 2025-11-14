@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback, useRef, useEffect } from "react"; // Import useRef and useEffect
+import { useCallback } from "react"; // Removed useRef and useEffect
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
@@ -18,8 +18,6 @@ type Props = {
   availableCategories: Category[];
 };
 
-const SCROLL_STORAGE_KEY = "exploreScrollPos";
-
 export default function ExploreView({
   featuredCards,
   initialCards,
@@ -29,26 +27,8 @@ export default function ExploreView({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const scrollContainerRef = useRef<HTMLElement>(null); // Ref for the scrollable main element
-
-  // Restore scroll position on component mount/re-render
-  useEffect(() => {
-    const savedPos = sessionStorage.getItem(SCROLL_STORAGE_KEY);
-    if (savedPos && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = parseInt(savedPos, 10);
-      // Optional: remove the item after restoring to prevent it from being used again on a fresh page load
-      sessionStorage.removeItem(SCROLL_STORAGE_KEY);
-    }
-  }, []); // Empty dependency array ensures this runs only when the component mounts
 
   const handleCardClick = (cardId: string) => {
-    // Save the current scroll position before navigating
-    if (scrollContainerRef.current) {
-      sessionStorage.setItem(
-        SCROLL_STORAGE_KEY,
-        scrollContainerRef.current.scrollTop.toString()
-      );
-    }
     router.push(`/events/${cardId}?from=${pathname}`);
   };
 
@@ -90,8 +70,7 @@ export default function ExploreView({
         availableCategories={availableCategories}
       />
 
-      {/* Attach the ref to your scrollable main element */}
-      <main ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
+      <main className="flex-1 overflow-y-auto p-4">
         <FeaturedCarousel
           featuredCards={featuredCards}
           onCardClick={(card) => handleCardClick(card.id)}

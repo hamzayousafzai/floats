@@ -8,7 +8,7 @@ export const revalidate = 0;
 
 export default async function EditEventPage({ params }: { params: { id: string } }) {
   const supabase = createSupabaseServer();
-  const { id: eventId } = params;
+  const { id: eventId } = await params;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return notFound();

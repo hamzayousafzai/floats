@@ -1,7 +1,13 @@
-import type { NextConfig } from "next";
-
-/** @type {import('next').NextConfig} */
-const nextConfig: NextConfig = {
+const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/explore',
+        permanent: true, // Use `false` if you want a temporary redirect
+      },
+    ]
+  },
   eslint: {
       // Allow deploys even if ESLint finds problems
       ignoreDuringBuilds: true,
