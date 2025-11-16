@@ -310,6 +310,7 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
                   initialFollowing={following}
                   onNotifyChange={handleNotifyChange} // <-- FIX THIS: Use the correct callback
                   onFollowChange={handleFollowChange} // <-- ADD THIS: Pass the follow callback
+                  disabled={isPreview || event.is_past} // Disable if in preview or event is past
                 />
                 <FavoriteButton
                   eventId={event.id}
@@ -320,7 +321,7 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
                   size="md"
                   onChange={handleFavoriteChange}
                   onAuthRedirect={handleAuthRedirect}
-                  disabled={isPreview} // Disable if in preview mode
+                  disabled={isPreview || event.is_past} // Disable if in preview mode or event is past
                 />
               </div>
             </div>
@@ -349,7 +350,7 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
                   endsAt={event.ends_at ?? null}
                   autoRun={searchParams.get("doCheckIn") === "1"}
                   initialChecked={alreadyChecked}
-                  disabled={isPreview} // Pass the isPreview prop as disabled
+                  disabled={isPreview || event.is_past} // Pass the isPreview prop or if event is past
                   onAuthRedirect={handleAuthRedirect} // Pass the auth redirect handler
                 />
               </div>
