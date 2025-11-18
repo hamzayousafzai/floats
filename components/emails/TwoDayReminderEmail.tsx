@@ -12,7 +12,7 @@ export const TwoDayReminderEmail: React.FC<Readonly<EmailProps>> = ({ eventTitle
       This is a friendly reminder that the event you're following, <strong>{eventTitle}</strong>, is happening in two days!
     </p>
     <p>
-      You can view the event details here:
+      You can view the event details here: 
       <a href={`https://findfloats.com/events/${eventId}`}>View Event</a>
     </p>
     <hr />

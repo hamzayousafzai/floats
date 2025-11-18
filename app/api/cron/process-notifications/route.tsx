@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
       // Send the email
       await resend.emails.send({
-        from: 'Floats <noreply@findfloats.com>', // Replace with your verified Resend "From" address
+        from: 'Floats <noreply@findfloats.com>', 
         to: [job.user_email],
         subject: subject,
         react: <EmailComponent eventTitle={job.event_title} eventId={job.event_id} />,
