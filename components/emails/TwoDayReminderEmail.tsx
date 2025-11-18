@@ -17,7 +17,7 @@ export const TwoDayReminderEmail: React.FC<Readonly<EmailProps>> = ({ eventTitle
     </p>
     <hr />
     <p>
-      <small>To unsubscribe from these reminders, please visit the event page and turn off notifications.</small>
+      <small>To unsubscribe from these Floats reminders, please visit the event page and turn off notifications.</small>
     </p>
   </div>
 );
