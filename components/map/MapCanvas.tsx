@@ -87,21 +87,31 @@ export default function MapCanvas({ onPinClick }: Props) {
         clearMarkers();
 
         data.forEach((p) => {
+          // --- THE FIX: Add the missing 'id' and 'imageUrl' properties ---
           const popupNode = createPinPopupContent({
+            id: p.id,
+            imageUrl: p.imageUrl,
             vendorSlug: p.vendorSlug,
             vendorName: p.vendorName,
             title: p.title,
             description: p.description,
             starts_at: p.starts_at,
             ends_at: p.ends_at,
-            address: p.address ?? undefined,
+            address: p.address,
           });
           popupNode.addEventListener("click", () => onPinClick(p));
 
           const markerEl = createMarkerElement(p.starts_at);
           const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
             .setLngLat([p.lng, p.lat])
-            .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
+            .setPopup(
+              new maplibregl.Popup({
+                offset: 25,
+                closeButton: false,
+                // --- THE FIX: Add a custom class name ---
+                className: "event-pin-popup",
+              }).setDOMContent(popupNode)
+            )
             .addTo(currentMap);
           markersRef.current.push(marker);
         });

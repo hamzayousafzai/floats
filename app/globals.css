@@ -79,3 +79,22 @@ body {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
 }
+
+/* Filepath: (Add to your global CSS file, e.g., app/globals.css) */
+
+/*
+ * Custom styles to remove the default MapLibre popup container
+ * when using our custom event pin popup.
+ */
+
+/* Target the content wrapper of our custom popup */
+.event-pin-popup .maplibregl-popup-content {
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+/* Hide the little triangle/beak at the bottom of the default popup */
+.event-pin-popup .maplibregl-popup-tip {
+  display: none;
+}
