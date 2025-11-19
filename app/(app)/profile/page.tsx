@@ -2,7 +2,6 @@ export const revalidate = 0;
 
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase/server";
-import SignOutButton from "@/components/SignOutButton";
 import Link from "next/link";
 import FavoriteEventsSection from "@/components/profile/FavoriteEventsSection";
 import ProfileHeader from "@/components/profile/ProfileHeader";
@@ -164,8 +163,9 @@ export default async function ProfilePage() {
     .split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <main className="px-4 pt-6">
-      <div className="mx-auto w-full max-w-4xl space-y-8 pb-10">
+    // 1. Make the <main> tag a simple container with no horizontal padding.
+    <main className="pt-6">
+      <div className="mx-auto w-full max-w-4xl space-y-8 pb-10 px-4 overflow-hidden">
         <ProfileHeader user={user} />
 
         <ProfileStats
@@ -174,7 +174,6 @@ export default async function ProfilePage() {
           checkedInEvents={checkedInEvents}
         />
 
-        {/* Badges row: replace controls for non-admin; below controls for admin */}
         {isAdmin ? (
           <>
             <section className="space-y-4">
@@ -191,21 +190,12 @@ export default async function ProfilePage() {
 
         <div className="divider"></div>
 
-        {/* Favorites */}
         {favoriteCount === 0 ? (
           <div className="rounded-xl border px-6 py-10 text-center">
-            <div className="mb-4 flex justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                <span className="text-gray-400 text-2xl">♡</span>
-              </div>
-            </div>
-            <p className="text-sm font-medium">No favorites yet</p>
-            <p className="mx-auto mt-2 max-w-xs text-xs text-gray-500">
-              Start exploring events and tap the Favorite button to save them!
+            <h3 className="text-lg font-semibold">No Favorites Yet</h3>
+            <p className="mt-2 text-sm text-base-content/70">
+              Tap the star on an event to save it here.
             </p>
-            <Link href="/explore" className="mt-5 inline-block rounded-md bg-black px-4 py-2 text-xs font-medium text-white">
-              Explore Events
-            </Link>
           </div>
         ) : (
           <FavoriteEventsSection events={favoriteEvents} />

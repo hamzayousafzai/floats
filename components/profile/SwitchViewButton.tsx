@@ -35,7 +35,8 @@ export default function SwitchViewButton() {
 
   return (
     <div className="dropdown dropdown-end w-full">
-      <label tabIndex={0} className="btn btn-outline w-full m-1">
+      {/* FIX: Removed the "m-1" class to prevent horizontal overflow */}
+      <label tabIndex={0} className="btn btn-outline w-full">
         <span>Switch View</span>
         <ChevronDown size={16} />
       </label>
