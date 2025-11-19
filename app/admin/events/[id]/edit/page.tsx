@@ -2,34 +2,34 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import EditEventForm from "@/components/admin/EditEventForm";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { notFound } from "next/navigation";
 
 export const revalidate = 0;
 
-export default async function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditEventPage({ params }: { params: { id: string } }) {
   const supabase = createSupabaseServer();
   const { id: eventId } = await params;
 
-  // MODIFIED: Update the select query to include event_media
-  const { data: event, error } = await supabase
-    .from("events")
-    .select(`*, event_media(*)`)
-    .eq("id", eventId)
-    .single();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return notFound();
 
-  if (error || !event) {
-    return <p className="p-4">Event not found or error loading: {error?.message}</p>;
+  // Fetch event, categories, and all orgs in parallel
+  const [eventRes, categoriesRes, orgsRes] = await Promise.all([
+    supabase.from("events").select(`*, event_media(*)`).eq("id", eventId).single(),
+    supabase.from("categories").select("id, name"),
+    // FIX: Select all columns to match the type expected by EditEventForm
+    supabase.from("orgs").select("*").order("name"),
+  ]);
+
+  if (eventRes.error || !eventRes.data) {
+    return <p className="p-4">Event not found or error loading: {eventRes.error?.message}</p>;
   }
 
-  // 1. Fetch all available categories
-  const { data: allCategories } = await supabase.from("categories").select("id, name");
-
-  // 2. Fetch the IDs of categories currently linked to this event
   const { data: eventCategories } = await supabase
     .from("event_categories")
     .select("category_id")
-    .eq("event_id", event.id);
+    .eq("event_id", eventRes.data.id);
 
-  // Create a Set of the current category IDs for easy lookup
   const currentCategoryIds = new Set(eventCategories?.map(ec => ec.category_id) ?? []);
 
   return (
@@ -42,9 +42,11 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
         </Link>
       </div>
       <EditEventForm
-        event={event}
-        allCategories={allCategories ?? []}
+        event={eventRes.data}
+        allCategories={categoriesRes.data ?? []}
         currentCategoryIds={currentCategoryIds}
+        orgs={orgsRes.data ?? []} // Pass the list of orgs
+        role="admin" // Pass the platform admin role
       />
     </div>
   );

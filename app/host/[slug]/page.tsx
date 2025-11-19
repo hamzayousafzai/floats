@@ -6,20 +6,29 @@ import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Tables } from "@/lib/database.types";
 import Link from "next/link";
+import EventDetailModal from "@/components/explore/EventDetailModal"; // Import the modal
+import { ExploreCardData } from "@/lib/types"; // Import the card data type
 
 type Event = Tables<'events'>;
 type StatusTab = 'all' | 'published' | 'draft' | 'archived';
 type DateFilter = 'all' | 'upcoming' | 'past7' | 'past30';
 
+// The type `Event` from Tables<'events'> will not include related tables by default.
+// We can define a more specific type for our component's state.
+type EventWithMedia = Tables<'events'> & {
+  event_media: { image_url: string; sort_index: number }[] | null;
+};
+
 export default function HostEventsPage() {
   const { currentOrg, role, loading: hostLoading } = useHost();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventWithMedia[]>([]); // Use the new type
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [deletingId, setDeletingId] = useState<string | null>(null); // NEW
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewingEvent, setViewingEvent] = useState<ExploreCardData | null>(null); // State for the preview modal
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -39,7 +48,8 @@ export default function HostEventsPage() {
         
         let query = supabase
           .from('events')
-          .select('*')
+          // FIX: Explicitly select all event columns AND the related event_media
+          .select('*, event_media ( image_url, sort_index )')
           .eq('org_id', currentOrg.id);
 
         if (activeTab !== 'all') {
@@ -78,7 +88,7 @@ export default function HostEventsPage() {
 
   const canCreateEvents = role === 'owner' || role === 'manager' || role === 'admin';
   const canEditEvents = role === 'owner' || role === 'manager' || role === 'editor' || role === 'admin';
-  const canDeleteEvents = role === 'owner' || role === 'manager' || role === 'admin'; // NEW
+  const canDeleteEvents = role === 'owner' || role === 'manager' || role === 'admin';
 
   const getTabClassName = (tabName: StatusTab) => {
     return `tab flex-1 ${activeTab === tabName ? 'tab-active font-semibold' : ''}`;
@@ -102,6 +112,26 @@ export default function HostEventsPage() {
       setDeletingId(null);
     }
   }
+
+  // Helper to map Supabase event to the format the modal expects
+  const mapToCardData = (event: EventWithMedia): ExploreCardData => ({
+    id: event.id,
+    title: event.title ?? "",
+    description: event.description ?? null,
+    starts_at: event.starts_at,
+    ends_at: event.ends_at,
+    image_url: event.image_url ?? null,
+    address: event.address ?? null,
+    latitude: event.latitude ?? null,
+    longitude: event.longitude ?? null,
+    series_id: event.series_id ?? null,
+    // These are not relevant for a host preview, so we can use defaults
+    is_starred: false,
+    is_notified: false,
+    categories: [],
+    // FIX: Pass the fetched event_media data to the modal
+    event_media: event.event_media ?? null,
+  });
 
   return (
     <div className="bg-gray-50 min-h-full">
@@ -186,6 +216,13 @@ export default function HostEventsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2 space-x-3">
+                      <button
+                        type="button"
+                        className="text-gray-600 hover:underline"
+                        onClick={() => setViewingEvent(mapToCardData(event))}
+                      >
+                        View
+                      </button>
                       {canEditEvents && currentOrg && (
                         <Link
                           href={`/host/${currentOrg.slug}/events/${event.id}/edit`}
@@ -219,6 +256,14 @@ export default function HostEventsPage() {
           </div>
         )}
       </div>
+      {/* Render the modal when an event is selected for viewing */}
+      {viewingEvent && (
+        <EventDetailModal
+          event={viewingEvent}
+          onClose={() => setViewingEvent(null)}
+          isPreview={true}
+        />
+      )}
     </div>
   );
 }

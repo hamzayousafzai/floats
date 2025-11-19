@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 
 type Option = {
@@ -16,32 +16,55 @@ type Props = {
 
 export default function SingleSelectDropdown({ options, value, onChange }: Props) {
   const [isOpen, setIsOpen] = useState(false);
-  const selectedOption = options.find((opt) => opt.value === value);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleSelect = (option: Option) => {
-    onChange(option.value);
-    setIsOpen(false);
-  };
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label || "Select";
+  // Check if active (assuming 'anytime' is the default)
+  const isActive = value !== "anytime";
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="text-sm px-3 py-1.5 border rounded-full whitespace-nowrap flex items-center gap-1"
+        // DAISYUI UPDATE: Matching the FilterDropdown styles exactly
+        className={`btn btn-sm rounded-full font-normal normal-case transition-all gap-2 ${
+          isActive
+            ? "btn-primary text-primary-content border-primary shadow-sm"
+            : "btn-outline border-base-300 bg-base-100 text-base-content hover:bg-base-200 hover:border-base-content/20"
+        }`}
       >
-        {selectedOption?.label ?? "Select..."}
-        <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        {selectedLabel}
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 w-48 bg-white border rounded-lg shadow-lg z-30">
-          <ul className="p-1">
+        // DAISYUI UPDATE: Dropdown container
+        <div className="absolute top-full mt-2 w-48 p-2 bg-base-100 border border-base-200 rounded-box shadow-xl z-30">
+          {/* DAISYUI UPDATE: Menu component */}
+          <ul className="menu menu-sm p-0 gap-1">
             {options.map((option) => (
               <li key={option.value}>
                 <button
-                  onClick={() => handleSelect(option)}
-                  className={`w-full text-left text-sm p-2 rounded-md hover:bg-gray-100 ${
-                    option.value === value ? "font-bold bg-gray-100" : ""
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  // Highlight the selected item
+                  className={`rounded-lg font-medium ${
+                    option.value === value
+                      ? "bg-primary text-primary-content hover:bg-primary hover:text-primary-content"
+                      : "hover:bg-base-200"
                   }`}
                 >
                   {option.label}

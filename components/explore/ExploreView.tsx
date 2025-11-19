@@ -1,11 +1,10 @@
 "use client";
 
-import { useSearchParams, useRouter } from "next/navigation";
-import { useCallback, useState } from "react"; // Import useState
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useCallback } from "react";
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
-import EventDetailModal from "./EventDetailModal";
 import FeaturedCarousel from "./FeaturedCarousel";
 import { FeaturedCardData } from "./FeaturedEventCard";
 
@@ -26,19 +25,22 @@ export default function ExploreView({
   availableCategories,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  
-  // State to manage which event is shown in the modal
-  const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
+
+  const handleCardClick = (cardId: string) => {
+    router.push(`/events/${cardId}?from=${pathname}`);
+  };
 
   const currentFilters = {
     search: searchParams.get("search") || "",
     when: searchParams.get("when") || "anytime",
     areas: new Set(searchParams.get("areas")?.split(",").filter(Boolean) ?? []),
-    categories: new Set(searchParams.get("categories")?.split(",").filter(Boolean) ?? []),
+    categories: new Set(
+      searchParams.get("categories")?.split(",").filter(Boolean) ?? []
+    ),
   };
 
-  // Wrap the handler in useCallback to stabilize its reference
   const handleFilterChange = useCallback(
     (
       filterType: "search" | "when" | "areas" | "categories",
@@ -47,48 +49,55 @@ export default function ExploreView({
       const params = new URLSearchParams(searchParams);
 
       if (typeof value === "string") {
-        if (value) {
-          params.set(filterType, value);
-        } else {
-          params.delete(filterType);
-        }
+        // FIX: Correctly remove the 'when' param if it's the default value 'anytime'
+        (value && value !== "anytime")
+          ? params.set(filterType, value)
+          : params.delete(filterType);
       } else {
-        if (value.size > 0) {
-          params.set(filterType, Array.from(value).join(","));
-        } else {
-          params.delete(filterType);
-        }
+        value.size > 0
+          ? params.set(filterType, Array.from(value).join(","))
+          : params.delete(filterType);
       }
 
       router.push(`/explore?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams] // Dependencies for the callback
+    [router, searchParams]
   );
 
-  return (
-    <div className="flex flex-col h-full">
+  // FIX: Create a single function to clear all filters at once
+  const clearAllFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("search");
+    params.delete("when");
+    params.delete("areas");
+    params.delete("categories");
+    router.push(`/explore?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
 
+
+  return (
+    <div className="flex flex-col h-full bg-base-200">
       <ExploreFilters
         currentFilters={currentFilters}
         onFilterChange={handleFilterChange}
+        onClearFilters={clearAllFilters} // Pass the new function down
         availableAreas={availableAreas}
         availableCategories={availableCategories}
       />
 
       <main className="flex-1 overflow-y-auto p-4">
-
         <FeaturedCarousel
-        featuredCards={featuredCards}
-        onCardClick={setSelectedEvent}
+          featuredCards={featuredCards}
+          onCardClick={(card) => handleCardClick(card.id)}
         />
+
         {initialCards.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {initialCards.map((card) => (
-              // Pass an onClick handler to set the selected event
               <EventCard
                 key={card.id}
                 card={card}
-                onClick={() => setSelectedEvent(card)}
+                onClick={() => handleCardClick(card.id)}
               />
             ))}
           </div>
@@ -99,12 +108,6 @@ export default function ExploreView({
           </div>
         )}
       </main>
-
-      {/* Render the modal and control it with state */}
-      <EventDetailModal
-        event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
-      />
     </div>
   );
 }

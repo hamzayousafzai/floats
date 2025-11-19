@@ -4,20 +4,13 @@ import { useHost } from "@/lib/contexts/HostContext";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Building } from "lucide-react";
 
-// Helper to get a color for each role badge
 const getRoleBadgeClass = (role: string | undefined) => {
-  // FIX: Use the lowercase roles from your database schema
   switch (role) {
-    case 'owner':
-      return 'badge-primary';
-    case 'manager':
-      return 'badge-secondary';
-    case 'editor':
-      return 'badge-accent';
-    case 'admin':
-      return 'badge-neutral';
-    default:
-      return 'badge-ghost';
+    case 'owner': return 'badge-primary';
+    case 'manager': return 'badge-secondary';
+    case 'editor': return 'badge-accent';
+    case 'admin': return 'badge-neutral';
+    default: return 'badge-ghost';
   }
 };
 
@@ -35,14 +28,18 @@ export default function SwitchViewButton() {
 
   return (
     <div className="dropdown dropdown-end w-full">
-      <label tabIndex={0} className="btn btn-outline w-full m-1">
+      {/* FIX: Updated style to match Admin Panel button (Ghost + Justified) */}
+      <label 
+        tabIndex={0} 
+        className="btn btn-ghost bg-base-200/50 w-full justify-between font-medium hover:bg-base-200"
+      >
         <span>Switch View</span>
-        <ChevronDown size={16} />
+        <ChevronDown size={16} className="opacity-50" />
       </label>
-      <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full">
+      
+      <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full max-h-72 overflow-y-auto mt-1">
         <li className="menu-title"><span>Your Organizations</span></li>
         {userOrgs.map(org => (
-          // The key error is resolved because the data from the view is now deduplicated
           <li key={org.id}>
             <a onClick={() => handleSwitch(org.slug)}>
               <div className="flex justify-between w-full items-center">
@@ -50,8 +47,7 @@ export default function SwitchViewButton() {
                   <Building size={16} />
                   {org.name}
                 </span>
-                {/* This now correctly displays the lowercase role */}
-                <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm`}>{org.role}</span>
+                <span className={`badge ${getRoleBadgeClass(org.role)} badge-sm ml-4`}>{org.role}</span>
               </div>
             </a>
           </li>

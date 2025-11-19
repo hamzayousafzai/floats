@@ -1,23 +1,65 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ExploreCardData } from "@/lib/types";
 import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
-import FavoriteButton from "@/components/FavoriteButton";
-import NotificationBell from "@/components/NotificationBell";
+import FavoriteButton from "../FavoriteButton";
+import NotificationBell from "../NotificationBell";
+import CheckInButton from "@/components/checkin/CheckInButton";
 
 type Props = {
   event: ExploreCardData | null;
   onClose: () => void;
   onCardChange?: (id: string, patch: Partial<ExploreCardData>) => void;
+  isPreview?: boolean; // Add isPreview prop
 };
 
-export default function EventDetailModal({ event, onClose, onCardChange }: Props) {
+export default function EventDetailModal({ event, onClose, onCardChange, isPreview = false }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null); // Create a ref for the dialog
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+  const searchParams = useSearchParams();
+
+  // This effect imperatively controls the dialog's visibility
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (event) {
+      // If there's an event and the dialog isn't already open, show it.
+      if (!dialog.open) {
+        dialog.showModal();
+      }
+    } else {
+      // If there's no event and the dialog is open, close it.
+      if (dialog.open) {
+        dialog.close();
+      }
+    }
+  }, [event]); // This effect runs whenever the `event` prop changes
+
+  const handleAuthRedirect = (redirectAction: () => void) => {
+    // This function will be passed to the FavoriteButton.
+    // It closes the dialog imperatively, then executes the redirect.
+    const dialog = dialogRef.current;
+    if (dialog && dialog.open) {
+      dialog.close();
+      // We wait for the 'close' event on the dialog before redirecting.
+      dialog.addEventListener('close', redirectAction, { once: true });
+    } else {
+      // If for some reason the dialog isn't open, just redirect immediately.
+      redirectAction();
+    }
+  };
+
   const [starred, setStarred] = useState<boolean>(event?.is_starred ?? false);
   const [notified, setNotified] = useState<boolean>(event?.is_notified ?? false);
   const [following, setFollowing] = useState<boolean>(event?.is_series_followed ?? false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [alreadyChecked, setAlreadyChecked] = useState(false); // NEW
 
   const fetchedKey = useRef<string | null>(null);
 
@@ -86,12 +128,11 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
 
   const shareEvent = useCallback(async () => {
     if (!event?.id) return;
-    const url = `${window.location.origin}/events/${event.id}`;
+    // Append ?from=/explore to ensure a clean redirect on close for shared links
+    const url = `${window.location.origin}/events/${event.id}?from=/explore`;
     try {
       if (navigator.share) {
         await navigator.share({
-          title: event.title ?? "Event",
-          text: event.description ?? undefined,
           url,
         });
         return;
@@ -122,7 +163,7 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     } catch (err) {
       console.error("Share failed:", err);
     }
-  }, [event?.id, event?.title, event?.description]);
+  }, [event?.id]);
 
   // Helper function to format dates consistently in EST
   const formatEventTime = useCallback((dateString: string) => {
@@ -196,13 +237,34 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
     // do the GETs here...
   }, [event?.id, event?.series_id]);
 
+  // Check-in state effect
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      if (!event?.id) {
+        setAlreadyChecked(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/check-in?event_id=${event.id}`, { cache: "no-store" });
+        if (!res.ok) { setAlreadyChecked(false); return; }
+        const json = await res.json();
+        if (!abort) setAlreadyChecked(Boolean(json?.checked));
+      } catch {
+        if (!abort) setAlreadyChecked(false);
+      }
+    })();
+    return () => { abort = true; };
+  }, [event?.id]);
+
   return (
-    <dialog id="event_modal" className="modal" open={!!event}>
+    // Remove the `open` prop and add the `ref` and `onClose` handler
+    <dialog ref={dialogRef} className="modal" onClose={onClose}>
       {event && (
-        <div className="modal-box">
-          {/* Wrap the close button in a form with method="dialog" */}
+        <div className="modal-box border border-base-300 bg-base-300">
+          {/* The form with method="dialog" is correct and should stay */}
           <form method="dialog">
-            <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
+            <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
           </form>
 
           {sortedImages.length > 0 && (
@@ -236,70 +298,85 @@ export default function EventDetailModal({ event, onClose, onCardChange }: Props
             </figure>
           )}
 
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-lg">{event.title}</h3>
+          <div className="p-4">
+            <div className="flex items-start">
+              <h3 className="text-xl font-bold mb-2 flex-1">{event.title}</h3>
+              <div className="flex items-center gap-3 ml-auto">
+                <NotificationBell
+                  eventId={event.id}
+                  seriesId={event.series_id}
+                  visible={starred} // <-- ADD THIS: Show the bell only when starred
+                  initialNotified={notified}
+                  initialFollowing={following}
+                  onNotifyChange={handleNotifyChange} // <-- FIX THIS: Use the correct callback
+                  onFollowChange={handleFollowChange} // <-- ADD THIS: Pass the follow callback
+                  disabled={isPreview || event.is_past} // Disable if in preview or event is past
+                />
+                <FavoriteButton
+                  eventId={event.id}
+                  seriesId={event.series_id ?? null}
+                  startsAt={event.starts_at ?? null}
+                  initialStarred={starred}
+                  variant="pill"
+                  size="md"
+                  onChange={handleFavoriteChange}
+                  onAuthRedirect={handleAuthRedirect}
+                  disabled={isPreview || event.is_past} // Disable if in preview mode or event is past
+                />
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 ml-auto">
-              <NotificationBell
-                key={event.id}                 // ensure a clean mount per event
-                eventId={event.id}
-                seriesId={event.series_id ?? null}
-                visible={Boolean(starred)}
-                initialNotified={notified}     // optional: pass if your Bell supports it
-                initialFollowing={following}   // optional
-                className="mr-1"
-                onNotifyChange={handleNotifyChange}
-                onFollowChange={handleFollowChange}
-              />
+            {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
 
-              <FavoriteButton
-                eventId={event.id}
-                seriesId={event.series_id ?? null}
-                startsAt={event.starts_at ?? null}
-                initialStarred={event.is_starred ?? undefined}
-                variant="pill"
-                size="md"
-                onChange={handleFavoriteChange}
-              />
-            </div>
-          </div>
-
-          {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
-
-          <div className="mt-2 space-y-2 text-sm">
-            {event.starts_at && (
+            <div className="mt-2 space-y-2 text-sm">
+              {event.starts_at && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+                <MapPin className="h-4 w-4 text-gray-500" />
+                <span>{event.address}</span>
+              </div>
+            </div>
+
+            {/* Primary CTA: full-width Check In */}
+            {event.starts_at && (
+              <div className="mt-4">
+                <CheckInButton
+                  eventId={event.id}
+                  startsAt={event.starts_at}
+                  endsAt={event.ends_at ?? null}
+                  autoRun={searchParams.get("doCheckIn") === "1"}
+                  initialChecked={alreadyChecked}
+                  disabled={isPreview || event.is_past} // Pass the isPreview prop or if event is past
+                  onAuthRedirect={handleAuthRedirect} // Pass the auth redirect handler
+                />
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-gray-500" />
-              <span>{event.address}</span>
-            </div>
-          </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
-            {canGetDirections && (
-              <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                <Navigation className="h-4 w-4" /> Get Directions
+            {/* Secondary actions */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
+              {canGetDirections && (
+                <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                  <Navigation className="h-4 w-4" /> Get Directions
+                </a>
+              )}
+
+              <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
+                <Download className="h-4 w-4" /> Add to Calendar
               </a>
-            )}
 
-            <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
-              <Download className="h-4 w-4" /> Add to Calendar
-            </a>
-
-            <button type="button" onClick={shareEvent} className="btn btn-outline">
-              <Share2 className="h-4 w-4" /> Share
-            </button>
+              <button type="button" onClick={shareEvent} className="btn btn-outline">
+                <Share2 className="h-4 w-4" /> Share
+              </button>
+            </div>
           </div>
         </div>
       )}
-      {/* This form handles the backdrop click to close */}
-      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+      {/* This form for backdrop click is also correct and should stay */}
+      <form method="dialog" className="modal-backdrop"><button>close</button></form>
     </dialog>
   );
 }

@@ -32,13 +32,16 @@ export default function MapFilters({
   return (
     <>
       {/* Time Filters */}
-      <div className="bg-white rounded-full shadow-md flex p-1">
+      <div className="bg-base-100 rounded-full shadow-md flex p-1 border border-base-200">
         {timeOptions.map(({ label, value }) => (
           <button
             key={value}
             onClick={() => onTimeChange(value)}
-            className={`text-xs px-3 py-1 rounded-full ${
-              time === value ? "bg-black text-white" : "bg-white text-black"
+            // FIX: Use theme colors (primary) instead of hardcoded black
+            className={`text-xs px-3 py-1 rounded-full transition-colors font-medium ${
+              time === value 
+                ? "bg-primary text-primary-content shadow-sm" 
+                : "bg-transparent text-base-content hover:bg-base-200"
             }`}
           >
             {label}
@@ -46,13 +49,16 @@ export default function MapFilters({
         ))}
       </div>
       {/* Distance Filters */}
-      <div className="bg-white rounded-full shadow-md flex p-1">
+      <div className="bg-base-100 rounded-full shadow-md flex p-1 border border-base-200">
         {distanceOptions.map(({ label, value }) => (
           <button
             key={value}
             onClick={() => onDistanceChange(value)}
-            className={`text-xs px-3 py-1 rounded-full ${
-              distance === value ? "bg-black text-white" : "bg-white text-black"
+            // FIX: Use theme colors (primary) instead of hardcoded black
+            className={`text-xs px-3 py-1 rounded-full transition-colors font-medium ${
+              distance === value 
+                ? "bg-primary text-primary-content shadow-sm" 
+                : "bg-transparent text-base-content hover:bg-base-200"
             }`}
           >
             {label}

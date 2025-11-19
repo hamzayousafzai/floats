@@ -11,7 +11,7 @@ export async function POST(
 
   try {
     // Auth & Admin checks
-    const supabase = await createSupabaseServer();
+    const supabase = await createSupabaseServer(); // This is the user-scoped client
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -21,9 +21,36 @@ export async function POST(
     const body = await req.json();
     
     // Extract the specific parts we need
-    const { coords, category_ids, event_media } = body;
+    const { coords, category_ids, event_media, org_id: newOrgId } = body;
 
-    // Build ONLY the fields that belong in the events table
+    const supabaseAdmin = createSupabaseAdmin(); // This is the admin (service_role) client
+
+    // --- START OF LOGIC ---
+    // 1. Get the current org_id to see if it has changed.
+    const { data: currentEvent, error: fetchError } = await supabaseAdmin
+      .from('events')
+      .select('org_id')
+      .eq('id', eventId)
+      .single();
+
+    if (fetchError) throw new Error(`Could not fetch current event: ${fetchError.message}`);
+
+    // 2. If the org_id has changed, call the specific RPC for it.
+    if (newOrgId && currentEvent.org_id !== newOrgId) {
+      // --- THE FIX: Use the user-scoped client for this RPC call ---
+      // This passes the user's auth context to the function so auth.uid() works.
+      const { error: transferError } = await supabase.rpc('admin_reassign_event_org', {
+        p_event_id: eventId,
+        p_new_org_id: newOrgId,
+      });
+      if (transferError) {
+        console.error("Org transfer RPC error:", transferError);
+        throw new Error(`Failed to transfer event organization: ${transferError.message}`);
+      }
+    }
+    // --- END OF LOGIC ---
+
+    // Build ONLY the fields that belong in the events table for the general update
     const updatePayload: any = {
       title: body.title,
       description: body.description,
@@ -48,18 +75,17 @@ export async function POST(
       }
     }
 
-    const supabaseAdmin = createSupabaseAdmin();
-
-    const { error } = await supabaseAdmin.rpc('update_event_with_media', {
+    // 3. Call the general update RPC for all other fields using the admin client.
+    const { error: updateError } = await supabaseAdmin.rpc('update_event_with_media', {
       p_event_id: eventId,
       p_event_data: updatePayload,
       p_media_data: event_media || [],
       p_category_ids: category_ids || []
     });
 
-    if (error) {
-      console.error("RPC error details:", error);
-      throw new Error(`Transaction failed: ${error.message}`);
+    if (updateError) {
+      console.error("RPC error details:", updateError);
+      throw new Error(`Transaction failed: ${updateError.message}`);
     }
 
     return NextResponse.json({ ok: true });

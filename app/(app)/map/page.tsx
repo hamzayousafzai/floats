@@ -1,32 +1,19 @@
 // app/(app)/map/page.tsx
 "use client";
 
-import { useState, Suspense } from "react";
+import { Suspense } from "react";
 import MapCanvas from "@/components/map/MapCanvas";
-import EventDetailModal from "@/components/explore/EventDetailModal";
-import { type ExploreCardData } from "@/components/explore/EventCard";
-import { type EventPin } from "@/lib/types";
+import type { EventPin } from "@/lib/types";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function MapPage() {
-  const [selectedEvent, setSelectedEvent] = useState<ExploreCardData | null>(null);
+  const router = useRouter();
+  const pathname = usePathname(); // Get the current path, e.g., "/map"
 
   const handlePinClick = (pin: EventPin) => {
-    const cardData: ExploreCardData = {
-      id: pin.id,
-      image_url: (pin as any).imageUrl ?? null,
-      title: (pin.title ?? "") as string,
-      starts_at: (pin as any).starts_at ?? null,
-      address: (pin as any).address ?? "",
-      latitude: (pin.lat ?? null) as number | null,
-      longitude: (pin.lng ?? null) as number | null,
-      description: (pin as any).description ?? null,
-      categories: (pin as any).categories ?? [],
-    };
-    setSelectedEvent(cardData);
-  };
-
-  const closeModal = () => {
-    setSelectedEvent(null);
+    // Navigate to the event page, passing the current path as the 'from' parameter
+    // The intercepted route will handle showing the modal.
+    router.push(`/events/${pin.id}?from=${pathname}`);
   };
 
   return (
@@ -34,7 +21,7 @@ export default function MapPage() {
       <Suspense fallback={<div className="flex items-center justify-center h-full">Loading map...</div>}>
         <MapCanvas onPinClick={handlePinClick} />
       </Suspense>
-      <EventDetailModal event={selectedEvent} onClose={closeModal} />
+      {/* The EventDetailModal is no longer rendered here. It's handled by the @modal intercepted route. */}
     </div>
   );
 }

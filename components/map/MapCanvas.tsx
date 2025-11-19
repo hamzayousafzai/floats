@@ -12,7 +12,11 @@ import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
   const category = getEventTimeCategory(starts_at ? new Date(starts_at) : undefined);
-  let color = "#9ca3af"; // Default: gray-400
+  
+  // FIX: Use a color that matches your theme's neutral or primary-dark
+  // oklch(65% 0.18 245) is your primary. Let's use a hex approximation or a slate blue.
+  let color = "#64748b"; // Slate-500 (Neutral Blue-Grey) matches your base-content/neutral vibe better than generic gray
+  
   if (category === "today") color = "#22c55e"; // Green-500
   else if (category === "weekend") color = "#f59e0b"; // Amber-500
 
@@ -87,21 +91,31 @@ export default function MapCanvas({ onPinClick }: Props) {
         clearMarkers();
 
         data.forEach((p) => {
+          // --- THE FIX: Add the missing 'id' and 'imageUrl' properties ---
           const popupNode = createPinPopupContent({
+            id: p.id,
+            imageUrl: p.imageUrl,
             vendorSlug: p.vendorSlug,
             vendorName: p.vendorName,
             title: p.title,
             description: p.description,
             starts_at: p.starts_at,
             ends_at: p.ends_at,
-            address: p.address ?? undefined,
+            address: p.address,
           });
           popupNode.addEventListener("click", () => onPinClick(p));
 
           const markerEl = createMarkerElement(p.starts_at);
           const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
             .setLngLat([p.lng, p.lat])
-            .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupNode))
+            .setPopup(
+              new maplibregl.Popup({
+                offset: 25,
+                closeButton: false,
+                // --- THE FIX: Add a custom class name ---
+                className: "event-pin-popup",
+              }).setDOMContent(popupNode)
+            )
             .addTo(currentMap);
           markersRef.current.push(marker);
         });

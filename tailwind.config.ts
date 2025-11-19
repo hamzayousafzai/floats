@@ -6,13 +6,7 @@ const config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  theme: {
-    extend: {},
-  },
-  plugins: [require("daisyui")],
-  daisyui: {
-    themes: ["light"], // or ["light", "dark"]
-  },
+  theme: { extend: {} },
 };
 
 export default config satisfies Config;

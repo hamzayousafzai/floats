@@ -1,10 +1,13 @@
-// FIX: This layout uses hooks, so it must be a client component.
 "use client";
-
-// FIX: Import the BottomNav component
 import BottomNav from "@/components/nav/BottomNav";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({
+  children,
+  modal, // NEW: intercepted route content
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   return (
     <div className="h-screen flex flex-col">
       {/* FIX: Adjust main content area to prevent overlap with the new nav bar */}
@@ -12,7 +15,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* FIX: Replace the old DaisyUI dock with the BottomNav component */}
+      {/* Render intercepted modal content above BottomNav */}
+      {modal}
+
       <BottomNav />
     </div>
   );

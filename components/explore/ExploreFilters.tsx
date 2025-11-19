@@ -18,6 +18,7 @@ type Props = {
     filterType: keyof FilterValues,
     value: string | Set<string>
   ) => void;
+  onClearFilters: () => void; // Add the new prop
   availableAreas: { name: string; slug: string }[];
   availableCategories: { name: string; slug: string }[];
 };
@@ -32,46 +33,51 @@ const whenOptions = [
 export default function ExploreFilters({
   currentFilters,
   onFilterChange,
+  onClearFilters, // Receive the new prop
   availableAreas,
   availableCategories,
 }: Props) {
   const [searchTerm, setSearchTerm] = useState(currentFilters.search);
 
+  // Sync local search term if URL changes from outside
+  useEffect(() => {
+    setSearchTerm(currentFilters.search);
+  }, [currentFilters.search]);
+
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
-      onFilterChange("search", searchTerm);
+      if (searchTerm !== currentFilters.search) {
+        onFilterChange("search", searchTerm);
+      }
     }, 500);
     return () => clearTimeout(handler);
-  }, [searchTerm, onFilterChange]);
+  }, [searchTerm, currentFilters.search, onFilterChange]);
 
   const isFilterActive =
     currentFilters.search ||
-    currentFilters.when !== "anytime" || // Match the default
+    currentFilters.when !== "anytime" ||
     currentFilters.areas.size > 0 ||
     currentFilters.categories.size > 0;
 
+  // FIX: The clearFilters function now just calls the prop from the parent
   const clearFilters = () => {
-    setSearchTerm("");
-    onFilterChange("search", "");
-    onFilterChange("when", "anytime"); // Match the default
-    onFilterChange("areas", new Set());
-    onFilterChange("categories", new Set());
+    setSearchTerm(""); // Clear local state immediately for responsiveness
+    onClearFilters();
   };
 
   return (
-    // The main sticky container now uses flex-col
-    <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-sm border-b p-2 flex flex-col gap-2">
+    <div className="sticky top-0 z-20 bg-base-200 border-b border-base-300 p-2 flex flex-col gap-2">
       {/* Row 1: Search Bar */}
       <div className="relative w-full">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-base-content/50" />
         <input
           type="text"
           placeholder="Search events..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="input input-bordered w-full h-12 pl-11 pr-3 rounded-full leading-normal
-               placeholder:text-base-content/50"
+          className="input input-bordered w-full h-12 pl-11 pr-3 rounded-full leading-normal bg-base-100
+               placeholder:text-base-content/50 focus:input-primary focus:border-primary transition-colors"
         />
       </div>
 
@@ -95,13 +101,12 @@ export default function ExploreFilters({
           onChange={(value) => onFilterChange("when", value)}
         />
 
-        {/* Spacer to push the clear button to the right */}
         <div className="flex-grow"></div>
 
         {isFilterActive && (
           <button
             onClick={clearFilters}
-            className="text-xs flex items-center gap-1 text-gray-600 hover:text-black whitespace-nowrap"
+            className="text-xs flex items-center gap-1 text-base-content/70 hover:text-base-content whitespace-nowrap"
           >
             <X className="h-3 w-3" />
             Clear Filters

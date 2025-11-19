@@ -1,13 +1,15 @@
 "use client";
 
 export type PinData = {
+  id: string; // Add id to make the card clickable
   vendorSlug: string;
   vendorName: string;
   title?: string | null;
-  description?: string | null; // Add description here
+  description?: string | null;
   starts_at?: string;
   ends_at?: string;
   address?: string | null;
+  imageUrl?: string | null; // Add imageUrl for the card
 };
 
 /**
@@ -95,55 +97,73 @@ export function createPinPopupContent(pin: PinData): HTMLElement {
     pin.starts_at ? new Date(pin.starts_at) : undefined
   );
 
-  let colorClass = "border-gray-300"; // Default (Future)
-  if (category === "today") {
-    colorClass = "border-green-500"; // Green for Today
-  } else if (category === "weekend") {
-    colorClass = "border-amber-500"; // Amber/Yellow for Weekend
-  }
+  // --- NEW CARD-BASED DESIGN ---
 
+  // Main wrapper: A DaisyUI card
   const wrapper = document.createElement("div");
-  wrapper.className = `relative w-56 rounded-md bg-white overflow-hidden ${colorClass} cursor-pointer`;
+  wrapper.className = "card card-compact w-64 bg-base-100 shadow-xl cursor-pointer";
+  wrapper.dataset.eventId = pin.id; // Add event ID for click handling
 
-  const content = document.createElement("div");
-  content.className = "p-1.5 pr-8 space-y-0.5";
-  wrapper.appendChild(content);
+  // Optional Image
+  if (pin.imageUrl) {
+    const figure = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = pin.imageUrl;
+    img.alt = pin.title ?? "Event image";
+    img.className = "h-24 w-full object-cover";
+    figure.appendChild(img);
+    wrapper.appendChild(figure);
+  }
 
+  // Card Body for content
+  const cardBody = document.createElement("div");
+  cardBody.className = "card-body p-3"; // Use p-3 for compact padding
+  wrapper.appendChild(cardBody);
+
+  // Time Category Badge
+  const badgeContainer = document.createElement("div");
+  badgeContainer.className = "card-actions -mt-1 mb-1"; // Adjust positioning
+  const badge = document.createElement("div");
+  badge.className = "badge badge-outline text-xs";
+
+  if (category === "today") {
+    badge.classList.add("badge-success");
+    badge.textContent = "Today";
+  } else if (category === "weekend") {
+    badge.classList.add("badge-warning");
+    badge.textContent = "This Weekend";
+  }
+  // No badge for "future" to keep it clean
+  if (category !== "future") {
+    badgeContainer.appendChild(badge);
+    cardBody.appendChild(badgeContainer);
+  }
+
+  // Title
   if (pin.title) {
-    const titleEl = document.createElement("p");
-    titleEl.className = "text-xs text-gray-700";
+    const titleEl = document.createElement("h2");
+    titleEl.className = "card-title text-base leading-tight"; // Use card-title
     titleEl.textContent = pin.title;
-    content.appendChild(titleEl);
+    cardBody.appendChild(titleEl);
   }
 
-  if (pin.vendorName && pin.vendorSlug) {
-    const vendorLink = document.createElement("a");
-    vendorLink.href = `/vendor/${pin.vendorSlug}`;
-    vendorLink.className = "text-sm font-semibold hover:underline block"; // Added 'block' for better layout
-    vendorLink.textContent = pin.vendorName;
-    content.appendChild(vendorLink);
-  }
-
-  // Add the description element
-  // const descriptionEl = document.createElement("p");
-  // descriptionEl.className = "text-xs text-gray-600 mt-1";
-  // descriptionEl.textContent = pin.description || "";
-  // content.appendChild(descriptionEl);
-
+  // Time Range
   const timeEl = document.createElement("p");
-  timeEl.className = "text-xs text-gray-500";
+  timeEl.className = "text-xs text-base-content/70";
   timeEl.textContent = fmtRange(pin.starts_at, pin.ends_at);
-  content.appendChild(timeEl);
+  cardBody.appendChild(timeEl);
 
+  // Address
   if (pin.address) {
     const addressEl = document.createElement("p");
-    addressEl.className = "text-xs text-gray-500 mt-1";
+    addressEl.className = "text-xs text-base-content/70 mt-1";
     addressEl.textContent = pin.address;
-    content.appendChild(addressEl);
+    cardBody.appendChild(addressEl);
   }
 
+  // Expand Icon (as an affordance)
   const expandIcon = document.createElement("div");
-  expandIcon.className = "absolute top-1/2 right-2 -translate-y-1/2 text-gray-400";
+  expandIcon.className = "absolute top-1/2 right-2 -translate-y-1/2 text-base-content/30";
   expandIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
   wrapper.appendChild(expandIcon);
 

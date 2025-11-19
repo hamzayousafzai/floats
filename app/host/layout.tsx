@@ -39,7 +39,7 @@ export default function HostLayout({
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div data-theme="corporate" className="flex flex-col h-screen">
       <ContextBar />
       <main className="flex-grow overflow-y-auto pb-16">
         {children}

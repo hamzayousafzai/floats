@@ -6,17 +6,22 @@ import { HostProvider } from "@/lib/contexts/HostContext"; // Import HostProvide
 
 const inter = Inter({ subsets: ["latin"] });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
+export const themeColor = "#ffffffff";
+
 export const metadata: Metadata = {
   title: "Floats",
   description: "Discover local markets, pop-ups, and events near you.",
-  // This helps iOS safe areas and mobile viewport
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
-  themeColor: "#ffffffff",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" data-theme="floats">
       <body className={inter.className}>
         <HostProvider> {/* Wrap everything with the provider */}
           {children}

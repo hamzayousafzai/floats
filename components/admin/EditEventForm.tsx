@@ -34,8 +34,8 @@ const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | n
 
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type MediaRow = Database["public"]["Tables"]["event_media"]["Row"];
-// FIX: Change category id type to string to match parent pages
 type Category = { id: string; name: string; };
+type Org = Database["public"]["Tables"]["orgs"]["Row"]; // Add Org type
 
 // --- MODIFIED: Add role to Props ---
 type Props = {
@@ -45,6 +45,7 @@ type Props = {
   // FIX: Change currentCategoryIds to expect a Set of strings
   currentCategoryIds?: Set<string>;
   role?: Database['public']['Enums']['org_role'] | 'admin' | null; // Add role prop
+  orgs?: Org[]; // Add orgs prop
 };
 
 // Define a new type for the media items in the form state
@@ -58,22 +59,22 @@ type MediaItem = {
 type FormState = {
   title: string;
   description: string;
-  // FIX: This will now hold one or more date pairs for creation
   dates: { starts_at: string; ends_at: string }[];
   address: string;
   event_media: MediaItem[];
   is_market: boolean;
   is_featured: boolean;
-  // FIX: Change category_ids to be a Set of strings
   category_ids: Set<string>;
   vendor_id: string | null;
   status: string;
   coords: string;
+  // --- FIX 1: Add org_id to the form state ---
+  org_id: string;
 };
 
 const TZ = "America/New_York";
 
-export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role }: Props) {
+export default function EditEventForm({ event, orgId, allCategories, currentCategoryIds, role, orgs = [] }: Props) {
   const router = useRouter();
   const isEditing = !!event;
 
@@ -97,12 +98,10 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const initialForm: FormState = {
     title: event?.title ?? "",
     description: event?.description ?? "",
-    // FIX: Initialize dates array. If editing, use the event's date. If new, start with one empty entry.
     dates: isEditing && event
       ? [{ starts_at: toInputDatetime(event.starts_at), ends_at: toInputDatetime(event.ends_at) }]
       : [{ starts_at: "", ends_at: "" }],
     address: event?.address ?? "",
-    // FIX: Initialize event_media. Map existing media or default to an empty array.
     event_media: event?.event_media?.map(media => ({
       id: media.id,
       image_url: media.image_url,
@@ -112,9 +111,11 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     is_featured: (event?.is_featured ?? false) as boolean,
     category_ids: new Set(currentCategoryIds ?? []),
     vendor_id: event?.vendor_id ?? "",
-    // FIX: Default new events to 'draft' status.
     status: (event?.status ?? "draft") as string,
     coords: "",
+    // --- FIX 2: Initialize org_id in the form state ---
+    // Use the event's org_id if editing, otherwise fall back.
+    org_id: event?.org_id ?? hostOrgId ?? orgId ?? "",
   };
 
   const [form, setForm] = useState<FormState>(initialForm);
@@ -222,8 +223,8 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       }));
 
       // --- MODIFIED: Handle dynamic orgId and API endpoint ---
-      // Use hostOrgId first, then fall back to prop orgId
-      const finalOrgId = event?.org_id || hostOrgId || orgId;
+      // --- FIX 4: Use the org_id FROM THE FORM STATE ---
+      const finalOrgId = form.org_id;
       if (!finalOrgId) throw new Error("Organization ID is missing.");
 
       let apiEndpoint: string;
@@ -236,7 +237,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
           ...form,
           starts_at: form.dates[0].starts_at,
           ends_at: form.dates[0].ends_at,
-          org_id: finalOrgId,
+          // The org_id from the form state is already in '...form', so this is correct.
           event_media: uploadedMedia,
           category_ids: Array.from(form.category_ids),
           dates: undefined, // Clean up payload
@@ -272,7 +273,16 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       if (!res.ok) throw new Error(result.error || "Submission failed");
 
       alert(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      router.push(`/host/${orgSlug}`);
+      
+      // --- THE FIX: Conditional Redirect ---
+      if (role === 'admin') {
+        // If the user is a global admin, redirect to the admin events page.
+        router.push('/admin/events');
+      } else {
+        // Otherwise, use the existing logic for host users.
+        router.push(`/host/${orgSlug}`);
+      }
+      
       router.refresh();
 
     } catch (err: any) {
@@ -340,6 +350,31 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             required
           />
         </div>
+
+        {/* Organization Dropdown - Conditionally rendered for platform admins */}
+        {role === "admin" && orgs.length > 0 && (
+          <div>
+            <label htmlFor="org_id" className="block text-sm font-medium mb-1">
+              Organization
+            </label>
+            {/* --- FIX 3: Make the select a controlled component --- */}
+            <select
+              id="org_id"
+              name="org_id"
+              value={form.org_id} // Use value from state
+              onChange={(e) => update("org_id", e.target.value)} // Update state on change
+              className="select select-bordered w-full"
+              required
+            >
+              <option value="" disabled>Select an organization</option>
+              {orgs.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Description */}
         <div>

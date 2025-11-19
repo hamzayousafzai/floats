@@ -17,6 +17,9 @@ export type FavoriteButtonProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
   onChange?: (starred: boolean) => void;
+  /** NEW: Receives a function that will perform the redirect. */
+  onAuthRedirect?: (redirectAction: () => void) => void;
+  disabled?: boolean; // Add disabled prop
 };
 
 export default memo(function FavoriteButton({
@@ -28,6 +31,8 @@ export default memo(function FavoriteButton({
   size = "md",
   className = "",
   onChange,
+  onAuthRedirect,
+  disabled = false, // Destructure and default
 }: FavoriteButtonProps) {
   const supabase = createSupabaseBrowserClient();
   const router = useRouter();
@@ -82,8 +87,19 @@ export default memo(function FavoriteButton({
   const toggle = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
-      router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      // Define the redirect action
+      const redirectAction = () => {
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        router.push(`/login?next=${encodeURIComponent(returnTo)}`);
+      };
+
+      // If the parent provided the onAuthRedirect handler, use it.
+      // Otherwise, fall back to immediate redirection.
+      if (onAuthRedirect) {
+        onAuthRedirect(redirectAction);
+      } else {
+        redirectAction();
+      }
       return;
     }
 
@@ -125,7 +141,7 @@ export default memo(function FavoriteButton({
     } finally {
       setLoading(false);
     }
-  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange, router]);
+  }, [loading, starred, supabase, eventId, seriesId, startsAt, onChange, router, onAuthRedirect]);
 
   const sizeClass = size === "sm" ? "btn-sm" : size === "lg" ? "btn-lg" : "btn-md";
 
@@ -135,12 +151,12 @@ export default memo(function FavoriteButton({
       <button
         type="button"
         onClick={toggle}
-        disabled={loading}
-        aria-label={starred ? "Unfavorite" : "Favorite"}
-        className={`btn btn-ghost ${sizeClass} ${className}`}
-        title={starred ? "Unfavorite" : "Favorite"}
+        disabled={loading || disabled} // Apply disabled prop here
+        aria-pressed={starred}
+        className={`btn btn-ghost btn-circle ${sizeClass} ${className}`}
+        title={starred ? "Favorited" : "Favorite"}
       >
-        <span className="text-lg">{starred ? "★" : "☆"}</span>
+        <span className="text-lg leading-none">{starred ? "★" : "☆"}</span>
       </button>
     );
   }
@@ -150,7 +166,7 @@ export default memo(function FavoriteButton({
     <button
       type="button"
       onClick={toggle}
-      disabled={loading}
+      disabled={loading || disabled} // Apply disabled prop here
       aria-pressed={starred}
       className={`btn ${starred ? "btn-primary" : "btn-outline"} ${sizeClass} ${className}`}
       title={starred ? "Favorited" : "Favorite"}
