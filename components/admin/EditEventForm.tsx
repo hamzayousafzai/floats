@@ -59,17 +59,17 @@ type MediaItem = {
 type FormState = {
   title: string;
   description: string;
-  // FIX: This will now hold one or more date pairs for creation
   dates: { starts_at: string; ends_at: string }[];
   address: string;
   event_media: MediaItem[];
   is_market: boolean;
   is_featured: boolean;
-  // FIX: Change category_ids to be a Set of strings
   category_ids: Set<string>;
   vendor_id: string | null;
   status: string;
   coords: string;
+  // --- FIX 1: Add org_id to the form state ---
+  org_id: string;
 };
 
 const TZ = "America/New_York";
@@ -98,12 +98,10 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const initialForm: FormState = {
     title: event?.title ?? "",
     description: event?.description ?? "",
-    // FIX: Initialize dates array. If editing, use the event's date. If new, start with one empty entry.
     dates: isEditing && event
       ? [{ starts_at: toInputDatetime(event.starts_at), ends_at: toInputDatetime(event.ends_at) }]
       : [{ starts_at: "", ends_at: "" }],
     address: event?.address ?? "",
-    // FIX: Initialize event_media. Map existing media or default to an empty array.
     event_media: event?.event_media?.map(media => ({
       id: media.id,
       image_url: media.image_url,
@@ -113,9 +111,11 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     is_featured: (event?.is_featured ?? false) as boolean,
     category_ids: new Set(currentCategoryIds ?? []),
     vendor_id: event?.vendor_id ?? "",
-    // FIX: Default new events to 'draft' status.
     status: (event?.status ?? "draft") as string,
     coords: "",
+    // --- FIX 2: Initialize org_id in the form state ---
+    // Use the event's org_id if editing, otherwise fall back.
+    org_id: event?.org_id ?? hostOrgId ?? orgId ?? "",
   };
 
   const [form, setForm] = useState<FormState>(initialForm);
@@ -223,8 +223,8 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       }));
 
       // --- MODIFIED: Handle dynamic orgId and API endpoint ---
-      // Use hostOrgId first, then fall back to prop orgId
-      const finalOrgId = event?.org_id || hostOrgId || orgId;
+      // --- FIX 4: Use the org_id FROM THE FORM STATE ---
+      const finalOrgId = form.org_id;
       if (!finalOrgId) throw new Error("Organization ID is missing.");
 
       let apiEndpoint: string;
@@ -237,7 +237,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
           ...form,
           starts_at: form.dates[0].starts_at,
           ends_at: form.dates[0].ends_at,
-          org_id: finalOrgId,
+          // The org_id from the form state is already in '...form', so this is correct.
           event_media: uploadedMedia,
           category_ids: Array.from(form.category_ids),
           dates: undefined, // Clean up payload
@@ -357,10 +357,12 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             <label htmlFor="org_id" className="block text-sm font-medium mb-1">
               Organization
             </label>
+            {/* --- FIX 3: Make the select a controlled component --- */}
             <select
               id="org_id"
               name="org_id"
-              defaultValue={event?.org_id ?? ""}
+              value={form.org_id} // Use value from state
+              onChange={(e) => update("org_id", e.target.value)} // Update state on change
               className="select select-bordered w-full"
               required
             >
