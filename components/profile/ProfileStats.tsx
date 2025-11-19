@@ -18,20 +18,20 @@ export default function ProfileStats({ favoriteCount, checkinCount, checkedInEve
   return (
     <>
       <section className="grid grid-cols-2 gap-4">
-        <div className="rounded-xl border px-4 py-3 text-center">
-          <div className="text-xl font-semibold">{favoriteCount}</div>
-          <div className="text-xs text-gray-500">Favorites</div>
+        <div className="rounded-2xl bg-base-100 shadow-sm px-4 py-4 text-center">
+          <div className="text-2xl font-bold text-primary">{favoriteCount}</div>
+          <div className="text-xs font-medium text-base-content/60 uppercase tracking-wide mt-1">Favorites</div>
         </div>
 
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-xl border px-4 py-3 text-center hover:bg-base-200 transition"
+          className="rounded-2xl bg-base-100 shadow-sm px-4 py-4 text-center hover:scale-[1.02] transition-transform active:scale-95"
           aria-haspopup="dialog"
           aria-expanded={open}
         >
-          <div className="text-xl font-semibold">{checkinCount}</div>
-          <div className="text-xs text-gray-500">Check-ins</div>
+          <div className="text-2xl font-bold text-secondary">{checkinCount}</div>
+          <div className="text-xs font-medium text-base-content/60 uppercase tracking-wide mt-1">Check-ins</div>
         </button>
       </section>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback } from "react"; // Removed useRef and useEffect
+import { useCallback } from "react";
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
@@ -49,7 +49,10 @@ export default function ExploreView({
       const params = new URLSearchParams(searchParams);
 
       if (typeof value === "string") {
-        value ? params.set(filterType, value) : params.delete(filterType);
+        // FIX: Correctly remove the 'when' param if it's the default value 'anytime'
+        (value && value !== "anytime")
+          ? params.set(filterType, value)
+          : params.delete(filterType);
       } else {
         value.size > 0
           ? params.set(filterType, Array.from(value).join(","))
@@ -61,11 +64,23 @@ export default function ExploreView({
     [router, searchParams]
   );
 
+  // FIX: Create a single function to clear all filters at once
+  const clearAllFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("search");
+    params.delete("when");
+    params.delete("areas");
+    params.delete("categories");
+    router.push(`/explore?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+
   return (
     <div className="flex flex-col h-full bg-base-200">
       <ExploreFilters
         currentFilters={currentFilters}
         onFilterChange={handleFilterChange}
+        onClearFilters={clearAllFilters} // Pass the new function down
         availableAreas={availableAreas}
         availableCategories={availableCategories}
       />

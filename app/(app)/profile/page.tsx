@@ -37,7 +37,7 @@ export default async function ProfilePage() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id);
 
-  // Two-step fetch: check_ins → events (normalize keys to strings to avoid Map miss)
+  // Two-step fetch: check_ins → events
   const { data: checkinRows } = await supabase
     .from("check_ins")
     .select("event_id, checked_at")
@@ -85,12 +85,12 @@ export default async function ProfilePage() {
       (rows ?? [])
         .map((e: any) => ({
           ...normalize(e),
-          checked_in_at: checkedAtMap.get(String(e.id)) as string, // keys normalized above
+          checked_in_at: checkedAtMap.get(String(e.id)) as string,
         }))
         .sort((a, b) => new Date(b.checked_in_at).getTime() - new Date(a.checked_in_at).getTime());
   }
 
-  // Load starred events (two-step for clarity/RLS-friendliness)
+  // Load starred events
   const { data: starRows } = await supabase
     .from("event_stars")
     .select("event_id")
@@ -99,7 +99,7 @@ export default async function ProfilePage() {
 
   const eventIds = (starRows ?? []).map(r => r.event_id);
 
-  // NEW: Fetch all event notification statuses for the user
+  // Fetch all event notification statuses for the user
   const { data: notificationRows } = await supabase
     .from("event_notifications")
     .select("event_id")
@@ -108,7 +108,6 @@ export default async function ProfilePage() {
 
   const notifiedEventIds = new Set(notificationRows?.map(r => r.event_id) ?? []);
 
-  // move/define normalize here so we use it when mapping rows -> favoriteEvents
   const normalize2 = (ev: any) => ({
     id: ev.id,
     title: ev.title,
@@ -122,13 +121,11 @@ export default async function ProfilePage() {
     series_id: ev.series_id ?? null,
     categories: ev.categories ?? [],
     is_starred: true,
-    // Add event_media to the normalized object
     event_media: ev.event_media ?? null,
-    // NEW: Check if the event ID is in our set of notified events
     is_notified: notifiedEventIds.has(ev.id),
   });
 
-  let favoriteEvents: Array<any> = []; // Type is complex, `any` is fine here
+  let favoriteEvents: Array<any> = [];
 
   if (eventIds.length) {
     const { data: rows } = await supabase
@@ -150,7 +147,7 @@ export default async function ProfilePage() {
     });
   }
 
-  // Fetch badge progress (3 rows expected)
+  // Fetch badge progress
   const { data: badgeRows } = await supabase
     .from("v_user_badges")
     .select("*")
@@ -159,13 +156,11 @@ export default async function ProfilePage() {
     .limit(3);
 
   const favoriteCount = favoriteEvents.length;
-  const initials = (user.user_metadata?.name || user.email || "?")
-    .split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    // 1. Make the <main> tag a simple container with no horizontal padding.
-    <main className="pt-6">
-      <div className="mx-auto w-full max-w-4xl space-y-8 pb-10 px-4 overflow-hidden">
+    // VISUAL UPDATE: Changed bg-base-300 to bg-base-200 for the main page background
+    <main className="min-h-screen pt-6 bg-base-200">
+      <div className="mx-auto w-full max-w-4xl space-y-6 pb-24 px-4 overflow-hidden">
         <ProfileHeader user={user} />
 
         <ProfileStats
@@ -174,24 +169,42 @@ export default async function ProfilePage() {
           checkedInEvents={checkedInEvents}
         />
 
-        {isAdmin ? (
-          <>
-            <section className="space-y-4">
-              <section>
-                <Link href="/admin" className="btn btn-outline w-full">Admin Panel</Link>
+        {/* VISUAL UPDATE: Changed bg-base-300 to bg-base-100 (White Card) */}
+        <div className="rounded-2xl bg-base-100 p-5 space-y-5 shadow-sm">
+          {isAdmin ? (
+            <>
+              <section className="space-y-3">
+                <section>
+                  <Link 
+                    href="/admin" 
+                    className="btn btn-ghost bg-base-200/50 w-full justify-between font-medium hover:bg-base-200"
+                  >
+                    <span>Admin Panel</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="m9 18 6-6-6-6"/></svg>
+                  </Link>
+                </section>
+                <SwitchViewButton />
               </section>
-              <SwitchViewButton />
-            </section>
-            <BadgeRow badges={badgeRows ?? []} />
-          </>
-        ) : (
-          <BadgeRow badges={badgeRows ?? []} />
-        )}
+              
+              <div className="h-px bg-base-content/5 w-full"></div>
+              
+              <div>
+                {/* FIX: Removed duplicate "My Badges" header */}
+                <BadgeRow badges={badgeRows ?? []} />
+              </div>
+            </>
+          ) : (
+            <div>
+              {/* FIX: Removed duplicate "My Badges" header */}
+              <BadgeRow badges={badgeRows ?? []} />
+            </div>
+          )}
+        </div>
 
-        <div className="divider"></div>
+        <div className="divider opacity-50"></div>
 
         {favoriteCount === 0 ? (
-          <div className="rounded-xl border px-6 py-10 text-center">
+          <div className="rounded-xl border border-dashed border-base-content/20 px-6 py-10 text-center bg-base-100">
             <h3 className="text-lg font-semibold">No Favorites Yet</h3>
             <p className="mt-2 text-sm text-base-content/70">
               Tap the star on an event to save it here.

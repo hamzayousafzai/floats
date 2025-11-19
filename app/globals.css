@@ -1,36 +1,56 @@
 @import "tailwindcss";
+
 @plugin "daisyui" {
   themes: all;
 }
 
-
 @plugin "daisyui/theme" {
-  name: "corporate";
-  default: false;
+  name: "floats";
+  default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0.003 247.858);
-  --color-base-200: oklch(96% 0.007 247.896);
-  --color-base-300: oklch(92% 0.013 255.508);
-  --color-base-content: oklch(20% 0.042 265.755);
-  --color-primary: oklch(82% 0.111 230.318);
-  --color-primary-content: oklch(28% 0.141 291.089);
-  --color-secondary: oklch(86% 0.005 56.366);
-  --color-secondary-content: oklch(14% 0.004 49.25);
-  --color-accent: oklch(84% 0.143 164.978);
-  --color-accent-content: oklch(26% 0.051 172.552);
-  --color-neutral: oklch(44% 0.043 257.281);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(68% 0.169 237.323);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(69% 0.17 162.48);
-  --color-success-content: oklch(97% 0.021 166.113);
-  --color-warning: oklch(79% 0.184 86.047);
-  --color-warning-content: oklch(98% 0.026 102.212);
-  --color-error: oklch(63% 0.237 25.331);
-  --color-error-content: oklch(97% 0.013 17.38);
-  --radius-selector: 0.5rem;
-  --radius-field: 0.5rem;
+
+  /* --- BASE --- */
+  /* Pure white for cards */
+  --color-base-100: oklch(100% 0 0);
+  /* Light blue-grey for secondary elements */
+  --color-base-200: oklch(95% 0.02 240);
+  /* Distinct Blue-Grey for Page Background (Darkened from 92% to 89%) */
+  --color-base-300: oklch(89% 0.05 240);
+  /* Text */
+  --color-base-content: oklch(20% 0.04 250);
+
+  /* --- PRIMARY: The Brand (Vibrant Sky Blue) --- */
+  /* Bright enough to be "Sky", deep enough to be a button */
+  --color-primary: oklch(65% 0.18 245);
+  /* White text on the blue button looks cleaner/more modern */
+  --color-primary-content: oklch(98% 0.01 240);
+
+  /* --- SECONDARY: The Accent (Soft Coral) --- */
+  /* A warm nod to "sun/beach" to balance the cool blue */
+  --color-secondary: oklch(75% 0.15 45);
+  --color-secondary-content: oklch(98% 0.01 45);
+
+  /* --- ACCENT: The Highlight (Mint/Teal) --- */
+  /* Good for badges or success-adjacent highlights */
+  --color-accent: oklch(82% 0.12 170);
+  --color-accent-content: oklch(20% 0.05 170);
+
+  /* --- NEUTRAL: UI Elements (Slate Grey) --- */
+  --color-neutral: oklch(35% 0.05 250);
+  --color-neutral-content: oklch(98% 0 0);
+
+  /* --- STATUS: Standard but tuned --- */
+  --color-info: oklch(70% 0.15 240);
+  --color-info-content: oklch(20% 0.05 240);
+  --color-success: oklch(75% 0.18 150);
+  --color-success-content: oklch(20% 0.05 150);
+  --color-warning: oklch(85% 0.18 85);
+  --color-warning-content: oklch(20% 0.05 85);
+  --color-error: oklch(65% 0.22 25);
+  --color-error-content: oklch(98% 0.01 25);
+  --radius-selector: 0.75rem;
+  --radius-field: 0.75rem;
   --radius-box: 1rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
@@ -38,8 +58,6 @@
   --depth: 0;
   --noise: 0;
 }
-
-
 
 html, body {
   margin: 0;

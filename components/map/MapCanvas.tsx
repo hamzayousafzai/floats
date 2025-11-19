@@ -12,7 +12,11 @@ import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
   const category = getEventTimeCategory(starts_at ? new Date(starts_at) : undefined);
-  let color = "#9ca3af"; // Default: gray-400
+  
+  // FIX: Use a color that matches your theme's neutral or primary-dark
+  // oklch(65% 0.18 245) is your primary. Let's use a hex approximation or a slate blue.
+  let color = "#64748b"; // Slate-500 (Neutral Blue-Grey) matches your base-content/neutral vibe better than generic gray
+  
   if (category === "today") color = "#22c55e"; // Green-500
   else if (category === "weekend") color = "#f59e0b"; // Amber-500
 
