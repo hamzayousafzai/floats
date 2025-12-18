@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useRef, useLayoutEffect } from "react";
 import { type ExploreCardData } from "./EventCard";
 import ExploreFilters from "./ExploreFilters";
 import EventCard from "./EventCard";
@@ -27,9 +27,24 @@ export default function ExploreView({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  
+  // 1. Create a ref for the scroll container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 2. Restore scroll position on mount (handles the case where the page refreshed)
+  useLayoutEffect(() => {
+    const savedPosition = sessionStorage.getItem("explore_scroll_pos");
+    if (savedPosition && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = parseInt(savedPosition, 10);
+    }
+  }, []);
 
   const handleCardClick = (cardId: string) => {
-    router.push(`/events/${cardId}?from=${pathname}`);
+    // 3. Save scroll position before navigating away
+    if (scrollContainerRef.current) {
+      sessionStorage.setItem("explore_scroll_pos", scrollContainerRef.current.scrollTop.toString());
+    }
+    router.push(`/events/${cardId}?from=${pathname}`, { scroll: false });
   };
 
   const currentFilters = {
@@ -46,10 +61,12 @@ export default function ExploreView({
       filterType: "search" | "when" | "areas" | "categories",
       value: string | Set<string>
     ) => {
+      // 4. Clear saved scroll when filters change (user wants to see top results)
+      sessionStorage.removeItem("explore_scroll_pos");
+
       const params = new URLSearchParams(searchParams);
 
       if (typeof value === "string") {
-        // FIX: Correctly remove the 'when' param if it's the default value 'anytime'
         (value && value !== "anytime")
           ? params.set(filterType, value)
           : params.delete(filterType);
@@ -64,8 +81,8 @@ export default function ExploreView({
     [router, searchParams]
   );
 
-  // FIX: Create a single function to clear all filters at once
   const clearAllFilters = useCallback(() => {
+    sessionStorage.removeItem("explore_scroll_pos"); // Clear here too
     const params = new URLSearchParams(searchParams);
     params.delete("search");
     params.delete("when");
@@ -80,12 +97,16 @@ export default function ExploreView({
       <ExploreFilters
         currentFilters={currentFilters}
         onFilterChange={handleFilterChange}
-        onClearFilters={clearAllFilters} // Pass the new function down
+        onClearFilters={clearAllFilters}
         availableAreas={availableAreas}
         availableCategories={availableCategories}
       />
 
-      <main className="flex-1 overflow-y-auto p-4">
+      {/* 5. Attach the ref to the scroll container */}
+      <main 
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto p-4"
+      >
         <FeaturedCarousel
           featuredCards={featuredCards}
           onCardClick={(card) => handleCardClick(card.id)}
