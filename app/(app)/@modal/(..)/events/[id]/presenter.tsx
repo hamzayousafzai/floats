@@ -26,7 +26,6 @@ export default function ModalPresenter({ event }: PresenterProps) {
   const fallbackPath = searchParams.get("from") || "/explore"; // Read the 'from' param, default to /explore
 
   const close = () => {
-    console.log("[ModalPresenter] close() called");
     // Check if we can go back in history.
     const idx = typeof window !== "undefined" ? (window.history.state?.idx ?? 0) : 0;
     if (idx > 0) {
