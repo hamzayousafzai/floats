@@ -126,6 +126,28 @@ export default function AdminNewEventForm({ orgs }: { orgs: Org[] }) {
   function handleDateChange(index: number, field: keyof EventDateTime, value: string) {
     const newDatetimes = [...datetimes];
     newDatetimes[index][field] = value;
+
+     // Auto-set Ends At logic
+     if (field === "starts_at" && value) {
+      const startDate = new Date(value);
+      if (!isNaN(startDate.getTime())) {
+        const currentEnd = newDatetimes[index].ends_at;
+        const endDate = currentEnd ? new Date(currentEnd) : null;
+
+        // If end date is empty OR end date is before the new start date, auto-set it to start + 2 hours
+        if (!currentEnd || (endDate && endDate < startDate)) {
+          const newEndDate = new Date(startDate);
+          newEndDate.setHours(newEndDate.getHours() + 2);
+
+          // Format to YYYY-MM-DDTHH:mm manually to preserve local time values
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          const formattedEnd = `${newEndDate.getFullYear()}-${pad(newEndDate.getMonth() + 1)}-${pad(newEndDate.getDate())}T${pad(newEndDate.getHours())}:${pad(newEndDate.getMinutes())}`;
+          
+          newDatetimes[index].ends_at = formattedEnd;
+        }
+      }
+    }
+
     setDatetimes(newDatetimes);
   }
 
@@ -302,6 +324,7 @@ export default function AdminNewEventForm({ orgs }: { orgs: Org[] }) {
                     <input
                       type="datetime-local"
                       value={dt.ends_at}
+                      min={dt.starts_at} /* Enforce end date cannot be before start date in UI */
                       onChange={(e) =>
                         handleDateChange(index, "ends_at", e.target.value)
                       }

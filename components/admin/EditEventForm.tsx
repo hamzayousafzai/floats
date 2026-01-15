@@ -144,6 +144,28 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   function handleDateChange(index: number, field: 'starts_at' | 'ends_at', value: string) {
     const newDates = [...form.dates];
     newDates[index][field] = value;
+
+    // Auto-set Ends At logic
+    if (field === "starts_at" && value) {
+      const startDate = new Date(value);
+      if (!isNaN(startDate.getTime())) {
+        const currentEnd = newDates[index].ends_at;
+        const endDate = currentEnd ? new Date(currentEnd) : null;
+
+        // If end date is empty OR end date is before the new start date, auto-set it to start + 2 hours
+        if (!currentEnd || (endDate && endDate < startDate)) {
+          const newEndDate = new Date(startDate);
+          newEndDate.setHours(newEndDate.getHours() + 2);
+
+          // Format to YYYY-MM-DDTHH:mm manually to preserve local time values
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          const formattedEnd = `${newEndDate.getFullYear()}-${pad(newEndDate.getMonth() + 1)}-${pad(newEndDate.getDate())}T${pad(newEndDate.getHours())}:${pad(newEndDate.getMinutes())}`;
+          
+          newDates[index].ends_at = formattedEnd;
+        }
+      }
+    }
+
     update('dates', newDates);
   }
 
@@ -435,6 +457,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
                 {index === 0 && <label className="block text-sm font-medium mb-1">Starts At</label>}
                 <input
                   type="datetime-local"
+                  step="900"
                   value={date.starts_at}
                   onChange={(e) => handleDateChange(index, 'starts_at', e.target.value)}
                   className="input input-bordered w-full"
@@ -446,7 +469,9 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
                   {index === 0 && <label className="block text-sm font-medium mb-1">Ends At</label>}
                   <input
                     type="datetime-local"
+                    step="900"
                     value={date.ends_at}
+                    min={date.starts_at} /* Enforce end date cannot be before start date in UI */
                     onChange={(e) => handleDateChange(index, 'ends_at', e.target.value)}
                     className="input input-bordered w-full"
                     required
