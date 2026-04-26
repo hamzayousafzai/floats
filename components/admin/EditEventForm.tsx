@@ -8,12 +8,11 @@ import { toZonedTime, format } from "date-fns-tz";
 import Cropper, { type Area } from "react-easy-crop";
 import { Plus, Trash2 } from "lucide-react";
 import { useHost } from "@/lib/contexts/HostContext";
-import { createPortal } from "react-dom";  // ADD
+import { createPortal } from "react-dom";
 
 // Helper function to create a cropped image blob (moved here for component use)
 const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | null> => {
   return new Promise((resolve) => {
-    // FIX: Use window.Image to avoid conflict with the imported Next.js Image component.
     const image = new window.Image();
     image.src = imageSrc;
     image.crossOrigin = "anonymous";
@@ -32,28 +31,72 @@ const createCroppedImage = (imageSrc: string, pixelCrop: Area): Promise<Blob | n
   });
 };
 
+// 15-minute interval time slots for the time <select>
+const padTwo = (n: number) => n.toString().padStart(2, "0");
+const TIME_SLOTS: string[] = [];
+for (let h = 0; h < 24; h++) {
+  for (let m = 0; m < 60; m += 15) {
+    TIME_SLOTS.push(`${padTwo(h)}:${padTwo(m)}`);
+  }
+}
+
+// Format a 24h "HH:mm" slot to a 12h display label
+function formatTimeLabel(slot: string): string {
+  const [hStr, mStr] = slot.split(":");
+  const h = parseInt(hStr, 10);
+  const suffix = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mStr} ${suffix}`;
+}
+
+// Extract YYYY-MM-DD from a YYYY-MM-DDTHH:mm string
+function getDatePart(dt: string): string {
+  return dt ? dt.slice(0, 10) : "";
+}
+
+// Extract HH:mm from a YYYY-MM-DDTHH:mm string, snapped to nearest 15-min slot
+function getTimePart(dt: string): string {
+  if (!dt || !dt.includes("T")) return "";
+  const [, time] = dt.split("T");
+  const [hStr, mStr] = time.split(":");
+  const h = parseInt(hStr, 10);
+  const m = Math.round(parseInt(mStr, 10) / 15) * 15;
+  if (m >= 60) return `${padTwo(h + 1 > 23 ? 0 : h + 1)}:00`;
+  return `${padTwo(h)}:${padTwo(m)}`;
+}
+
+// Formats a Date to YYYY-MM-DDTHH:mm (local time, safe for datetime-local inputs)
+function formatLocalDatetime(date: Date): string {
+  return `${date.getFullYear()}-${padTwo(date.getMonth() + 1)}-${padTwo(date.getDate())}T${padTwo(date.getHours())}:${padTwo(date.getMinutes())}`;
+}
+
+// Returns the Nth occurrence of a weekday in a given year/month (1-indexed n)
+function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
+  const first = new Date(year, month, 1);
+  const firstWeekday = first.getDay();
+  const day = 1 + ((weekday - firstWeekday + 7) % 7) + (n - 1) * 7;
+  return new Date(year, month, day);
+}
+
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type MediaRow = Database["public"]["Tables"]["event_media"]["Row"];
 type Category = { id: string; name: string; };
-type Org = Database["public"]["Tables"]["orgs"]["Row"]; // Add Org type
+type Org = Database["public"]["Tables"]["orgs"]["Row"];
 
-// --- MODIFIED: Add role to Props ---
 type Props = {
   event?: EventRow & { event_media: MediaRow[] | null };
   orgId?: string;
   allCategories: Category[];
-  // FIX: Change currentCategoryIds to expect a Set of strings
   currentCategoryIds?: Set<string>;
-  role?: Database['public']['Enums']['org_role'] | 'admin' | null; // Add role prop
-  orgs?: Org[]; // Add orgs prop
+  role?: Database['public']['Enums']['org_role'] | 'admin' | null;
+  orgs?: Org[];
 };
 
-// Define a new type for the media items in the form state
 type MediaItem = {
-  id?: string; // Existing media ID
+  id?: string;
   image_url: string;
   sort_index: number;
-  file?: File | Blob; // Can be a File or a cropped Blob
+  file?: File | Blob;
 };
 
 type FormState = {
@@ -68,9 +111,10 @@ type FormState = {
   vendor_id: string | null;
   status: string;
   coords: string;
-  // --- FIX 1: Add org_id to the form state ---
   org_id: string;
 };
+
+type GenPattern = "weekly" | "biweekly" | "monthly-date" | "monthly-weekday";
 
 const TZ = "America/New_York";
 
@@ -78,12 +122,10 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const router = useRouter();
   const isEditing = !!event;
 
-  // FIX: derive org info from Host context (used for submit + redirect)
   const { currentOrg } = useHost();
   const hostOrgId = currentOrg?.id ?? null;
   const orgSlug = currentOrg?.slug ?? "";
 
-  // MOVE this helper above initialForm so it’s defined before use
   const toInputDatetime = (v: string | null | undefined) => {
     if (!v) return "";
     try {
@@ -113,16 +155,19 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     vendor_id: event?.vendor_id ?? "",
     status: (event?.status ?? "draft") as string,
     coords: "",
-    // --- FIX 2: Initialize org_id in the form state ---
-    // Use the event's org_id if editing, otherwise fall back.
     org_id: event?.org_id ?? hostOrgId ?? orgId ?? "",
   };
 
   const [form, setForm] = useState<FormState>(initialForm);
-  // FIX: Add state for the recurring checkbox, only relevant for new events
   const [isRecurring, setIsRecurring] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // --- Pattern generator state ---
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [genPattern, setGenPattern] = useState<GenPattern>("weekly");
+  const [genCount, setGenCount] = useState(4);
+  const [genAppend, setGenAppend] = useState(false);
 
   // --- Cropper State ---
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
@@ -134,34 +179,25 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
-  // --- End Cropper State ---
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((prev) => ({ ...prev, [k]: v }));
   }
 
-  // --- FIX: Add functions to manage the dates array ---
   function handleDateChange(index: number, field: 'starts_at' | 'ends_at', value: string) {
     const newDates = [...form.dates];
     newDates[index][field] = value;
 
-    // Auto-set Ends At logic
     if (field === "starts_at" && value) {
       const startDate = new Date(value);
       if (!isNaN(startDate.getTime())) {
         const currentEnd = newDates[index].ends_at;
         const endDate = currentEnd ? new Date(currentEnd) : null;
 
-        // If end date is empty OR end date is before the new start date, auto-set it to start + 2 hours
         if (!currentEnd || (endDate && endDate < startDate)) {
           const newEndDate = new Date(startDate);
           newEndDate.setHours(newEndDate.getHours() + 2);
-
-          // Format to YYYY-MM-DDTHH:mm manually to preserve local time values
-          const pad = (n: number) => n.toString().padStart(2, "0");
-          const formattedEnd = `${newEndDate.getFullYear()}-${pad(newEndDate.getMonth() + 1)}-${pad(newEndDate.getDate())}T${pad(newEndDate.getHours())}:${pad(newEndDate.getMinutes())}`;
-          
-          newDates[index].ends_at = formattedEnd;
+          newDates[index].ends_at = formatLocalDatetime(newEndDate);
         }
       }
     }
@@ -169,17 +205,85 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     update('dates', newDates);
   }
 
+  // Copies the previous entry's times and advances the date by 7 days as a sensible default.
+  // The admin/host only needs to adjust the date, not re-enter the time.
   function addDate() {
-    update('dates', [...form.dates, { starts_at: "", ends_at: "" }]);
+    const last = form.dates[form.dates.length - 1];
+
+    if (last.starts_at) {
+      const prevStart = new Date(last.starts_at);
+      const nextStart = new Date(prevStart);
+      nextStart.setDate(nextStart.getDate() + 7);
+
+      let nextEnd = "";
+      if (last.ends_at) {
+        const prevEnd = new Date(last.ends_at);
+        const durationMs = prevEnd.getTime() - prevStart.getTime();
+        nextEnd = formatLocalDatetime(new Date(nextStart.getTime() + durationMs));
+      }
+
+      update('dates', [...form.dates, { starts_at: formatLocalDatetime(nextStart), ends_at: nextEnd }]);
+    } else {
+      update('dates', [...form.dates, { starts_at: "", ends_at: "" }]);
+    }
   }
 
   function removeDate(index: number) {
     if (form.dates.length > 1) {
-      const newDates = form.dates.filter((_, i) => i !== index);
-      update('dates', newDates);
+      update('dates', form.dates.filter((_, i) => i !== index));
     }
   }
-  // --- End Date Management ---
+
+  // Generates dates from the first entry using the selected pattern.
+  function generateDates() {
+    const base = form.dates[0];
+    if (!base.starts_at) {
+      alert("Set the first date before generating a pattern.");
+      return;
+    }
+
+    const baseStart = new Date(base.starts_at);
+    const baseEnd = base.ends_at ? new Date(base.ends_at) : null;
+    const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
+
+    const weekday = baseStart.getDay();
+    const occurrence = Math.floor((baseStart.getDate() - 1) / 7) + 1;
+
+    const generated: { starts_at: string; ends_at: string }[] = [base];
+
+    for (let i = 1; i < genCount; i++) {
+      let nextStart: Date;
+
+      if (genPattern === "weekly") {
+        nextStart = new Date(baseStart);
+        nextStart.setDate(baseStart.getDate() + i * 7);
+      } else if (genPattern === "biweekly") {
+        nextStart = new Date(baseStart);
+        nextStart.setDate(baseStart.getDate() + i * 14);
+      } else if (genPattern === "monthly-date") {
+        nextStart = new Date(baseStart);
+        nextStart.setMonth(baseStart.getMonth() + i);
+      } else {
+        // monthly-weekday: Nth [weekday] of month
+        const targetMonth = baseStart.getMonth() + i;
+        const targetYear = baseStart.getFullYear() + Math.floor(targetMonth / 12);
+        nextStart = getNthWeekdayOfMonth(targetYear, targetMonth % 12, weekday, occurrence);
+        nextStart.setHours(baseStart.getHours(), baseStart.getMinutes(), 0, 0);
+      }
+
+      const nextEnd = baseEnd && durationMs > 0
+        ? new Date(nextStart.getTime() + durationMs)
+        : null;
+
+      generated.push({
+        starts_at: formatLocalDatetime(nextStart),
+        ends_at: nextEnd ? formatLocalDatetime(nextEnd) : "",
+      });
+    }
+
+    update('dates', genAppend ? [...form.dates, ...generated.slice(1)] : generated);
+    setShowGenerator(false);
+  }
 
   function handleCategoryChange(categoryId: string, isChecked: boolean) {
     const newCategoryIds = new Set(form.category_ids);
@@ -191,20 +295,18 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
     update('category_ids', newCategoryIds);
   }
 
-  // --- Updated Image Handling ---
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       const reader = new FileReader();
       reader.addEventListener("load", () => setImageToCrop(reader.result as string), false);
       reader.readAsDataURL(file);
-      e.target.value = ""; // Clear input to allow re-selecting the same file
+      e.target.value = "";
     }
   };
 
   const handleSaveCrop = async () => {
     if (!imageToCrop || !croppedAreaPixels) return;
-
     const croppedImageBlob = await createCroppedImage(imageToCrop, croppedAreaPixels);
     if (croppedImageBlob) {
       const newMediaItems: MediaItem[] = [...form.event_media];
@@ -216,56 +318,47 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       });
       update("event_media", newMediaItems);
     }
-    // Close the cropper modal
     setImageToCrop(null);
   };
 
   function removeImage(index: number) {
     const newMedia = form.event_media.filter((_, i) => i !== index);
-    // Re-index the remaining images
-    const reindexedMedia = newMedia.map((item, idx) => ({ ...item, sort_index: idx }));
-    update("event_media", reindexedMedia);
+    update("event_media", newMedia.map((item, idx) => ({ ...item, sort_index: idx })));
   }
-  // --- End Updated Image Handling ---
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
       const uploadedMedia = await Promise.all(form.event_media.map(async (media) => {
-        if (media.file) { // This is a new file that needs to be uploaded
+        if (media.file) {
           const formData = new FormData();
           formData.append('file', media.file);
           const res = await fetch('/api/upload', { method: 'POST', body: formData });
           const result = await res.json();
           if (!res.ok) throw new Error(result.error || 'Upload failed');
-          return { ...media, image_url: result.url, file: undefined }; // Replace local URL with Supabase URL
+          return { ...media, image_url: result.url, file: undefined };
         }
-        return media; // This is an existing image
+        return media;
       }));
 
-      // --- MODIFIED: Handle dynamic orgId and API endpoint ---
-      // --- FIX 4: Use the org_id FROM THE FORM STATE ---
       const finalOrgId = form.org_id;
       if (!finalOrgId) throw new Error("Organization ID is missing.");
 
       let apiEndpoint: string;
-      let body: any;
+      let body: unknown;
 
       if (isEditing) {
-        // --- UPDATE LOGIC (Single Event) ---
         apiEndpoint = `/admin/events/${event.id}/update`;
         body = {
           ...form,
           starts_at: form.dates[0].starts_at,
           ends_at: form.dates[0].ends_at,
-          // The org_id from the form state is already in '...form', so this is correct.
           event_media: uploadedMedia,
           category_ids: Array.from(form.category_ids),
-          dates: undefined, // Clean up payload
+          dates: undefined,
         };
       } else {
-        // --- CREATE LOGIC (Single or Recurring) ---
         apiEndpoint = '/admin/events/new/submit';
         body = {
           org_id: finalOrgId,
@@ -292,33 +385,38 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
       });
 
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Submission failed");
+      if (!res.ok) throw new Error((result as { error?: string }).error || "Submission failed");
 
       alert(`Event ${isEditing ? 'updated' : 'created'} successfully!`);
-      
-      // --- THE FIX: Conditional Redirect ---
+
       if (role === 'admin') {
-        // If the user is a global admin, redirect to the admin events page.
         router.push('/admin/events');
       } else {
-        // Otherwise, use the existing logic for host users.
         router.push(`/host/${orgSlug}`);
       }
-      
+
       router.refresh();
 
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
       setSaving(false);
     }
   }
 
-  // --- Role-based permissions ---
   const canPublish = role === 'admin' || role === 'owner';
   const canArchive = role === 'admin' || role === 'owner';
-  // An editor can only edit, not change status from draft/published.
   const canChangeStatus = role !== 'editor';
+
+  // Dynamic label for monthly-weekday pattern, derived from the first date entry
+  const monthlyWeekdayLabel = (() => {
+    if (!form.dates[0]?.starts_at) return "Monthly (Nth weekday)";
+    const d = new Date(form.dates[0].starts_at);
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const ordinals = ["1st", "2nd", "3rd", "4th", "5th"];
+    const n = Math.floor((d.getDate() - 1) / 7);
+    return `Monthly (${ordinals[n]} ${days[d.getDay()]})`;
+  })();
 
   return (
     <>
@@ -339,18 +437,10 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
                 />
               </div>
               <div className="flex-shrink-0 pt-4 flex justify-end gap-2">
-                <button
-                  type="button"                        // ADD
-                  onClick={() => setImageToCrop(null)}
-                  className="btn btn-ghost"
-                >
+                <button type="button" onClick={() => setImageToCrop(null)} className="btn btn-ghost">
                   Cancel
                 </button>
-                <button
-                  type="button"                        // ADD
-                  onClick={handleSaveCrop}
-                  className="btn btn-primary"
-                >
+                <button type="button" onClick={handleSaveCrop} className="btn btn-primary">
                   Save Crop
                 </button>
               </div>
@@ -373,26 +463,21 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
           />
         </div>
 
-        {/* Organization Dropdown - Conditionally rendered for platform admins */}
+        {/* Organization Dropdown — admin only */}
         {role === "admin" && orgs.length > 0 && (
           <div>
-            <label htmlFor="org_id" className="block text-sm font-medium mb-1">
-              Organization
-            </label>
-            {/* --- FIX 3: Make the select a controlled component --- */}
+            <label htmlFor="org_id" className="block text-sm font-medium mb-1">Organization</label>
             <select
               id="org_id"
               name="org_id"
-              value={form.org_id} // Use value from state
-              onChange={(e) => update("org_id", e.target.value)} // Update state on change
+              value={form.org_id}
+              onChange={(e) => update("org_id", e.target.value)}
               className="select select-bordered w-full"
               required
             >
               <option value="" disabled>Select an organization</option>
               {orgs.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
+                <option key={org.id} value={org.id}>{org.name}</option>
               ))}
             </select>
           </div>
@@ -429,67 +514,188 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             <div className="mt-4">
               <label className="btn btn-outline w-full">
                 + Add Image
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
+                <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
               </label>
             </div>
           )}
         </div>
 
-        {/* --- RECURRING & DATE FIELDS --- */}
+        {/* ── Recurring toggle (create only) ── */}
         {!isEditing && (
           <div className="form-control">
             <label className="cursor-pointer label justify-start gap-2 p-0">
-              <input type="checkbox" checked={isRecurring} onChange={() => setIsRecurring(!isRecurring)} className="checkbox" />
+              <input
+                type="checkbox"
+                checked={isRecurring}
+                onChange={() => setIsRecurring(!isRecurring)}
+                className="checkbox"
+              />
               <span className="label-text">This is a recurring event</span>
+              {isRecurring && form.dates.length > 1 && (
+                <span className="ml-2 text-xs text-gray-500 font-medium">{form.dates.length} dates</span>
+              )}
             </label>
           </div>
         )}
 
+        {/* ── Date entries ── */}
         <div className="space-y-4">
           {(isRecurring && !isEditing ? form.dates : [form.dates[0]]).map((date, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                {index === 0 && <label className="block text-sm font-medium mb-1">Starts At</label>}
-                <input
-                  type="datetime-local"
-                  step="900"
-                  value={date.starts_at}
-                  onChange={(e) => handleDateChange(index, 'starts_at', e.target.value)}
-                  className="input input-bordered w-full"
-                  required
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-grow">
-                  {index === 0 && <label className="block text-sm font-medium mb-1">Ends At</label>}
-                  <input
-                    type="datetime-local"
-                    step="900"
-                    value={date.ends_at}
-                    min={date.starts_at} /* Enforce end date cannot be before start date in UI */
-                    onChange={(e) => handleDateChange(index, 'ends_at', e.target.value)}
-                    className="input input-bordered w-full"
-                    required
-                  />
+            <div key={index} className="space-y-2">
+              <p className="block text-sm font-medium">
+                {isRecurring && !isEditing ? `Occurrence ${index + 1}` : "Date & Time"}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Starts At */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Starts At</label>
+                  <div className="flex gap-1">
+                    <input
+                      required
+                      type="date"
+                      value={getDatePart(date.starts_at)}
+                      onChange={(e) => {
+                        const t = getTimePart(date.starts_at) || "09:00";
+                        handleDateChange(index, 'starts_at', `${e.target.value}T${t}`);
+                      }}
+                      className="input input-bordered input-sm flex-1 min-w-0"
+                    />
+                    <select
+                      required
+                      value={getTimePart(date.starts_at)}
+                      onChange={(e) => {
+                        const d = getDatePart(date.starts_at);
+                        if (d) handleDateChange(index, 'starts_at', `${d}T${e.target.value}`);
+                      }}
+                      className="select select-bordered select-sm"
+                    >
+                      <option value="" disabled>Time</option>
+                      {TIME_SLOTS.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                {isRecurring && !isEditing && form.dates.length > 1 && (
-                  <button type="button" onClick={() => removeDate(index)} className="btn btn-ghost btn-square">
-                    <Trash2 size={18} className="text-red-500" />
-                  </button>
-                )}
+                {/* Ends At */}
+                <div className="flex gap-1 items-end">
+                  <div className="flex-grow">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Ends At</label>
+                    <div className="flex gap-1">
+                      <input
+                        required
+                        type="date"
+                        value={getDatePart(date.ends_at)}
+                        min={getDatePart(date.starts_at)}
+                        onChange={(e) => {
+                          const t = getTimePart(date.ends_at) || getTimePart(date.starts_at) || "11:00";
+                          handleDateChange(index, 'ends_at', `${e.target.value}T${t}`);
+                        }}
+                        className="input input-bordered input-sm flex-1 min-w-0"
+                      />
+                      <select
+                        required
+                        value={getTimePart(date.ends_at)}
+                        onChange={(e) => {
+                          const d = getDatePart(date.ends_at) || getDatePart(date.starts_at);
+                          if (d) handleDateChange(index, 'ends_at', `${d}T${e.target.value}`);
+                        }}
+                        className="select select-bordered select-sm"
+                      >
+                        <option value="" disabled>Time</option>
+                        {TIME_SLOTS.map((slot) => (
+                          <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {isRecurring && !isEditing && form.dates.length > 1 && (
+                    <button type="button" onClick={() => removeDate(index)} className="btn btn-ghost btn-square">
+                      <Trash2 size={18} className="text-red-500" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
+
+          {/* Recurring controls */}
           {isRecurring && !isEditing && (
-            <button type="button" onClick={addDate} className="btn btn-sm btn-outline mt-2">
-              <Plus size={16} className="mr-1" />
-              Add another date
-            </button>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button type="button" onClick={addDate} className="btn btn-sm btn-outline">
+                <Plus size={16} className="mr-1" />
+                Add date
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGenerator((v) => !v)}
+                className="btn btn-sm btn-ghost text-blue-600"
+              >
+                {showGenerator ? "▲ Hide generator" : "▼ Generate from pattern"}
+              </button>
+              {form.dates.length >= 3 && (
+                <button
+                  type="button"
+                  onClick={() => update('dates', [form.dates[0]])}
+                  className="btn btn-sm btn-ghost text-red-500 ml-auto"
+                >
+                  Clear all dates
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Bulk pattern generator panel ── */}
+          {isRecurring && !isEditing && showGenerator && (
+            <div className="p-4 bg-base-200 rounded-lg space-y-3 text-sm">
+              <p className="font-medium text-xs uppercase tracking-wide text-gray-500">
+                Generate from pattern
+              </p>
+              <p className="text-xs text-gray-500">
+                Uses the first date entry as the base. Time and duration are preserved across all generated dates.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Pattern</label>
+                  <select
+                    value={genPattern}
+                    onChange={(e) => setGenPattern(e.target.value as GenPattern)}
+                    className="select select-bordered select-sm w-full"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Bi-weekly (every 2 weeks)</option>
+                    <option value="monthly-date">Monthly (same date)</option>
+                    <option value="monthly-weekday">{monthlyWeekdayLabel}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Total occurrences</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={52}
+                    value={genCount}
+                    onChange={(e) => setGenCount(Math.max(2, Math.min(52, Number(e.target.value))))}
+                    className="input input-bordered input-sm w-full"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  id="gen_append"
+                  type="checkbox"
+                  checked={genAppend}
+                  onChange={(e) => setGenAppend(e.target.checked)}
+                  className="checkbox checkbox-sm"
+                />
+                <span className="text-xs">Append to existing dates (otherwise replaces all)</span>
+              </label>
+
+              <button type="button" onClick={generateDates} className="btn btn-sm btn-primary">
+                Generate {genCount} dates
+              </button>
+            </div>
           )}
         </div>
 
@@ -510,7 +716,6 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             <input type="checkbox" className="checkbox" checked={form.is_market} onChange={(e) => update("is_market", e.target.checked)} />
             <span>Is Market Event</span>
           </label>
-          {/* FIX: Conditionally render "Featured Event" checkbox for admins */}
           {role === 'admin' && (
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" className="checkbox" checked={form.is_featured} onChange={(e) => update("is_featured", e.target.checked)} />
@@ -538,7 +743,6 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
         </div>
 
         {/* Status */}
-        {/* FIX: Conditionally render the status dropdown based on role and use new values */}
         {canChangeStatus && (
           <div>
             <label className="block text-sm font-medium mb-1">Status</label>
@@ -548,20 +752,14 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
               className="select select-bordered w-full"
             >
               <option value="draft">Draft</option>
-              {/* Only show 'Published' and 'Archived' to users with permission */}
               {canPublish && <option value="published">Published</option>}
               {canArchive && <option value="archived">Archived</option>}
             </select>
           </div>
         )}
 
-        {/* --- MODIFIED: Submit Button Text --- */}
         <div className="pt-4">
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn btn-primary w-full"
-          >
+          <button type="submit" disabled={saving} className="btn btn-primary w-full">
             {saving ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Event" : "Create Event")}
           </button>
         </div>
