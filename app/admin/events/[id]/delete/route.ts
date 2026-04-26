@@ -33,16 +33,25 @@ async function handler(
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    // Server-side role check to block editors
-    const { data: mem, error: memErr } = await supabase
-      .from("org_members")
-      .select("role")
-      .eq("org_id", evt.org_id)
+    // Check if user is a global admin first
+    const { data: adminRecord } = await admin
+      .from("app_admins")
+      .select("user_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (memErr || !mem || !ALLOWED_ROLES.includes(mem.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!adminRecord) {
+      // Not a global admin — fall back to org membership check
+      const { data: mem, error: memErr } = await supabase
+        .from("org_members")
+        .select("role")
+        .eq("org_id", evt.org_id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (memErr || !mem || !ALLOWED_ROLES.includes(mem.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     // Cleanup all related child tables
