@@ -7,24 +7,25 @@ import { useSearchParams, useRouter } from "next/navigation";
 
 import type { EventPin } from "@/lib/types";
 import MapFilters, { type TimeFilter, type DistanceFilter } from "./MapFilters";
-import AreaFilters, { type Area } from "../filters/AreaFilters";
-import { createPinPopupContent, getEventTimeCategory } from "./PinPopup";
+import MapFilterSheet from "./MapFilterSheet";
+import MapBottomSheet from "./MapBottomSheet";
+import { getEventTimeCategory } from "./PinPopup";
+import type { Area } from "@/components/filters/AreaFilters";
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
   const category = getEventTimeCategory(starts_at ? new Date(starts_at) : undefined);
-  
-  // FIX: Use a color that matches your theme's neutral or primary-dark
-  // oklch(65% 0.18 245) is your primary. Let's use a hex approximation or a slate blue.
-  let color = "#64748b"; // Slate-500 (Neutral Blue-Grey) matches your base-content/neutral vibe better than generic gray
-  
-  if (category === "today") color = "#22c55e"; // Green-500
-  else if (category === "weekend") color = "#f59e0b"; // Amber-500
+
+  let fill = "#64748b"; // Slate-500 — future/default
+  if (category === "today") fill = "#22c55e";   // Green-500
+  else if (category === "weekend") fill = "#f59e0b"; // Amber-500
 
   const el = document.createElement("div");
   el.innerHTML = `
-    <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
-      <path d="M14 0C6.268 0 0 6.268 0 14C0 24.5 14 36 14 36S28 24.5 28 14C28 6.268 21.732 0 14 0Z" fill="${color}"/>
-      <circle cx="14" cy="14" r="5" fill="white"/>
+    <svg width="36" height="46" viewBox="-2 -2 36 46" xmlns="http://www.w3.org/2000/svg"
+      style="filter: drop-shadow(0 2px 6px rgba(0,0,0,0.28))">
+      <path d="M16 0C7.163 0 0 7.163 0 16C0 24.837 16 42 16 42C16 42 32 24.837 32 16C32 7.163 24.837 0 16 0Z"
+        fill="${fill}" stroke="white" stroke-width="2"/>
+      <circle cx="16" cy="15" r="5" fill="white" opacity="0.9"/>
     </svg>`;
   el.style.cursor = "pointer";
   return el;
@@ -38,23 +39,29 @@ export default function MapCanvas({ onPinClick }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+
   const [time, setTime] = useState<TimeFilter>("this-month");
   const [distance, setDistance] = useState<DistanceFilter>("5");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [selectedPin, setSelectedPin] = useState<EventPin | null>(null);
+  const [pinCount, setPinCount] = useState(0);
+  const [availableAreas, setAvailableAreas] = useState<Area[]>([]);
+
   const abortRef = useRef<AbortController | null>(null);
   const reqIdRef = useRef(0);
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // State for the new area filter
-  const [availableAreas, setAvailableAreas] = useState<Area[]>([]);
-  const selectedAreas = new Set(searchParams.get("areas")?.split(",") ?? []);
+  const selectedAreas = new Set(searchParams.get("areas")?.split(",").filter(Boolean) ?? []);
+
+  const hasActiveFilters =
+    distance !== "5" || selectedAreas.size > 0;
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
   };
 
-  // This function now only depends on what's needed to build the API call.
   const fetchAndPlacePins = useCallback(
     async (currentMap: Map) => {
       abortRef.current?.abort();
@@ -68,7 +75,6 @@ export default function MapCanvas({ onPinClick }: Props) {
         distance: distance,
         when: time,
       });
-      // Add selected areas to the API call
       const areas = searchParams.get("areas");
       if (areas) {
         params.set("area_slugs", areas);
@@ -89,33 +95,14 @@ export default function MapCanvas({ onPinClick }: Props) {
         if (myReqId !== reqIdRef.current) return;
 
         clearMarkers();
+        setPinCount(data.length);
 
         data.forEach((p) => {
-          // --- THE FIX: Add the missing 'id' and 'imageUrl' properties ---
-          const popupNode = createPinPopupContent({
-            id: p.id,
-            imageUrl: p.imageUrl,
-            vendorSlug: p.vendorSlug,
-            vendorName: p.vendorName,
-            title: p.title,
-            description: p.description,
-            starts_at: p.starts_at,
-            ends_at: p.ends_at,
-            address: p.address,
-          });
-          popupNode.addEventListener("click", () => onPinClick(p));
+          const markerEl = createMarkerElement(p.starts_at ?? undefined);
+          markerEl.addEventListener("click", () => setSelectedPin(p));
 
-          const markerEl = createMarkerElement(p.starts_at);
           const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
             .setLngLat([p.lng, p.lat])
-            .setPopup(
-              new maplibregl.Popup({
-                offset: 25,
-                closeButton: false,
-                // --- THE FIX: Add a custom class name ---
-                className: "event-pin-popup",
-              }).setDOMContent(popupNode)
-            )
             .addTo(currentMap);
           markersRef.current.push(marker);
         });
@@ -124,79 +111,70 @@ export default function MapCanvas({ onPinClick }: Props) {
         console.error("Failed to fetch map pins:", e);
       }
     },
-    [time, distance, onPinClick, searchParams] // Add searchParams to dependency array
+    [time, distance, searchParams]
   );
 
-  // Effect 1: Initialize the map ONCE on component mount.
+  // Effect 1: Initialize the map ONCE
   useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current) return; // Initialize only once
+    if (mapRef.current || !mapContainerRef.current) return;
 
     const maxBounds: [number, number, number, number] = [-81.2, 35.0, -80.5, 35.5];
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
       center: [-80.8431, 35.2271],
-      zoom: 12, // Initial zoom, will be adjusted by the zoom effect
+      zoom: 12,
       minZoom: 10,
       maxBounds: maxBounds,
     });
     mapRef.current = map;
 
-    // Cleanup function to run when the component unmounts
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, []); // Empty dependency array ensures this runs only once.
+  }, []);
 
-  // Effect 2: Manage map event listeners.
+  // Effect 2: Attach map listeners
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return; // Don't do anything if the map isn't ready
+    if (!map) return;
 
-    // This is the single source of truth for fetching data.
     const handleMoveEnd = () => fetchAndPlacePins(map);
-
-    // Attach listeners
     map.on("load", handleMoveEnd);
     map.on("moveend", handleMoveEnd);
 
-    // Cleanup function to remove listeners when the handler changes or component unmounts
     return () => {
       map.off("load", handleMoveEnd);
       map.off("moveend", handleMoveEnd);
     };
-  }, [fetchAndPlacePins]); // This re-attaches the listener when the fetch logic changes.
+  }, [fetchAndPlacePins]);
 
-  // Effect 3: This effect is ONLY for zooming. It remains the same.
+  // Effect 3: Zoom on distance change
   useEffect(() => {
     if (!mapRef.current) return;
-
     const zoomLevels: Record<DistanceFilter, number> = {
-      "5": 12, // Corrected zoom levels
+      "5": 12,
       "10": 11,
       "20": 10,
     };
-
-    mapRef.current.flyTo({
-      zoom: zoomLevels[distance],
-      duration: 1200,
-    });
+    mapRef.current.flyTo({ zoom: zoomLevels[distance], duration: 1200 });
   }, [distance]);
 
-  // Fetch available areas once
+  // Effect 4: Re-fetch pins when filters change (time, distance, or areas)
   useEffect(() => {
-    const fetchAreas = async () => {
-      // In a real app, you'd fetch this from your DB
-      const areas: Area[] = [
-        { name: "Uptown", slug: "uptown" },
-        { name: "South End", slug: "south-end" },
-        { name: "NoDa", slug: "noda" },
-        { name: "Plaza Midwood", slug: "plaza-midwood" },
-      ];
-      setAvailableAreas(areas);
-    };
-    fetchAreas();
+    if (!mapRef.current) return;
+    fetchAndPlacePins(mapRef.current);
+  }, [fetchAndPlacePins]);
+
+  // Fetch available areas once (hardcoded for Charlotte MVP)
+  useEffect(() => {
+    setAvailableAreas([
+      { name: "Uptown", slug: "uptown" },
+      { name: "South End", slug: "south-end" },
+      { name: "NoDa", slug: "noda" },
+      { name: "Plaza Midwood", slug: "plaza-midwood" },
+    ]);
   }, []);
 
   const handleAreaChange = (newSelected: Set<string>) => {
@@ -206,26 +184,55 @@ export default function MapCanvas({ onPinClick }: Props) {
     } else {
       params.delete("areas");
     }
-    // Use router.push to update URL without reloading page
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
   return (
     <div className="w-full h-full relative">
-      <div className="absolute top-3 left-3 z-10 space-y-2">
+      {/* Map tile */}
+      <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Control bar — top left */}
+      <div className="absolute top-3 left-3 z-10">
         <MapFilters
           time={time}
           onTimeChange={setTime}
-          distance={distance}
-          onDistanceChange={setDistance}
-        />
-        <AreaFilters
-          areas={availableAreas}
-          selected={selectedAreas}
-          onChange={handleAreaChange}
+          hasActiveFilters={hasActiveFilters}
+          onFiltersOpen={() => setFilterSheetOpen(true)}
         />
       </div>
-      <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Event count badge — above bottom nav */}
+      {pinCount > 0 && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-base-100/90 backdrop-blur-sm border border-base-200 rounded-full px-4 py-1.5 shadow-md text-xs font-medium text-base-content/70 whitespace-nowrap">
+            {pinCount} event{pinCount !== 1 ? "s" : ""} in search area
+          </div>
+        </div>
+      )}
+
+      {/* Filter sheet */}
+      <MapFilterSheet
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        distance={distance}
+        onDistanceChange={setDistance}
+        areas={availableAreas}
+        selectedAreas={selectedAreas}
+        onAreaChange={handleAreaChange}
+      />
+
+      {/* Bottom sheet event preview */}
+      <MapBottomSheet
+        pin={selectedPin}
+        onClose={() => setSelectedPin(null)}
+        onViewEvent={() => {
+          if (selectedPin) {
+            onPinClick(selectedPin);
+            setSelectedPin(null);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -44,7 +44,9 @@ export default function ExploreView({
     if (scrollContainerRef.current) {
       sessionStorage.setItem("explore_scroll_pos", scrollContainerRef.current.scrollTop.toString());
     }
-    router.push(`/events/${cardId}?from=${pathname}`, { scroll: false });
+    const currentSearch = searchParams.toString();
+    const fromPath = currentSearch ? `${pathname}?${currentSearch}` : pathname;
+    router.push(`/events/${cardId}?from=${encodeURIComponent(fromPath)}`, { scroll: false });
   };
 
   const currentFilters = {

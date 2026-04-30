@@ -45,6 +45,10 @@ export async function GET(req: Request) {
     const lng = Number(url.searchParams.get("lng"));
     const distanceMi = Number(url.searchParams.get("distance") ?? "5");
     const when = url.searchParams.get("when") ?? "this-month";
+    const areaSlugsParam = url.searchParams.get("area_slugs");
+    const areaSlugs = areaSlugsParam
+      ? areaSlugsParam.split(",").filter(Boolean)
+      : [];
 
     if ([lat, lng].some((n) => Number.isNaN(n))) {
       return NextResponse.json({ error: "Missing lat/lng" }, { status: 400 });
@@ -55,8 +59,26 @@ export async function GET(req: Request) {
 
     const supabase = createSupabaseServer();
 
+    // Resolve area slugs → area UUIDs (areas table uses area_id FK on events)
+    let areaIds: string[] = [];
+    if (areaSlugs.length > 0) {
+      const { data: areaRows, error: areaErr } = await supabase
+        .from("areas")
+        .select("id")
+        .in("slug", areaSlugs);
+      if (areaErr) {
+        console.error("Area lookup error:", areaErr);
+        return NextResponse.json({ error: areaErr.message }, { status: 500 });
+      }
+      areaIds = (areaRows ?? []).map((r) => r.id);
+      // If none matched, return empty immediately — no point querying events
+      if (areaIds.length === 0) {
+        return NextResponse.json([]);
+      }
+    }
+
     // Prefer explicit latitude/longitude columns; fall back to geom only if needed.
-    const { data, error } = await supabase
+    const baseQuery = supabase
       .from("events")
       .select(`
         id,
@@ -79,6 +101,13 @@ export async function GET(req: Request) {
       .gte("longitude", swLng)
       .lte("longitude", neLng)
       .order("starts_at", { ascending: true });
+
+    // Filter by area_id if slugs were specified
+    const query = areaIds.length > 0
+      ? baseQuery.in("area_id", areaIds)
+      : baseQuery;
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Map search error:", error);
