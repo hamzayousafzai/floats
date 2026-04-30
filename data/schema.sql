@@ -87,23 +87,43 @@ create policy "Owner update vendors" on public.vendors for update to authenticat
 create policy "Owner delete vendors" on public.vendors for delete to authenticated using (created_by = auth.uid());
 
 -- =========================================================
+-- AREAS (neighborhoods / districts for filtering)
+-- =========================================================
+create table if not exists public.areas (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  geom geography(Polygon, 4326),
+  is_active boolean not null default true
+);
+
+alter table public.areas enable row level security;
+create policy "Public read areas" on public.areas for select to anon, authenticated using (true);
+
+-- =========================================================
 -- EVENTS (a vendor appearing at a time/place)
 -- =========================================================
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
-  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  vendor_id uuid references public.vendors(id) on delete cascade,
+  org_id uuid references public.orgs(id) on delete cascade,
   market_id uuid references public.markets(id) on delete set null,
+  series_id uuid references public.series(id) on delete set null,
+  area_id uuid references public.areas(id) on delete set null,
   title text,
-  status text default 'scheduled',
+  description text,
+  status text default 'published',
   address text,
-  
+  is_featured boolean not null default false,
+  is_market boolean,
+
   -- Geocoding columns
   latitude double precision,
   longitude double precision,
   geom geography(Point, 4326) generated always as (ST_MakePoint(longitude, latitude)::geography) stored,
 
   starts_at timestamptz not null,
-  ends_at   timestamptz,
+  ends_at   timestamptz not null,
   image_url text,
 
   created_at timestamptz not null default now(),

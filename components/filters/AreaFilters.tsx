@@ -38,8 +38,8 @@ export default function AreaFilters({ areas, selected, onChange }: Props) {
         onClick={() => handleToggle("all")}
         className={`text-xs px-3 py-1 rounded-full transition-colors ${
           isAllActive
-            ? "bg-blue-500 text-white"
-            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            ? "bg-primary text-primary-content"
+            : "bg-base-200 text-base-content hover:bg-base-300"
         }`}
       >
         All Areas
@@ -52,8 +52,8 @@ export default function AreaFilters({ areas, selected, onChange }: Props) {
           onClick={() => handleToggle(slug)}
           className={`text-xs px-3 py-1 rounded-full transition-colors ${
             selected.has(slug)
-              ? "bg-blue-500 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "bg-primary text-primary-content"
+              : "bg-base-200 text-base-content hover:bg-base-300"
           }`}
         >
           {name}
