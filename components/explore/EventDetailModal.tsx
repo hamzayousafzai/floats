@@ -262,6 +262,11 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
       ref={dialogRef}
       className="fixed inset-0 m-0 max-w-full w-full h-full max-h-full bg-transparent p-0 backdrop:bg-black/50 backdrop:backdrop-blur-sm"
       onClose={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
       {event && (
         <div className="flex flex-col h-full max-w-lg mx-auto bg-white overflow-hidden">

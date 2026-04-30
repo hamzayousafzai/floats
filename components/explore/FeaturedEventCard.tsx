@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Clock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FavoriteButton from "@/components/FavoriteButton";
 import type { ExploreCardData } from "./EventCard";
 
@@ -27,6 +27,11 @@ export default function FeaturedEventCard({
 
   // Track starred locally so the button wrapper can respond visually
   const [starred, setStarred] = useState<boolean>(card.is_starred ?? false);
+
+  // Re-sync local state if the card prop changes (e.g. parent updates is_starred externally)
+  useEffect(() => {
+    setStarred(card.is_starred ?? false);
+  }, [card.id, card.is_starred]);
 
   const formatTimeRange = (startsAt: string, endsAt?: string | null) => {
     const start = new Date(startsAt);
@@ -106,6 +111,7 @@ export default function FeaturedEventCard({
               initialStarred={card.is_starred ?? undefined}
               variant="icon"
               className={starred ? "text-white hover:text-white" : "text-white/80 hover:text-white"}
+              onInitialLoad={(val) => setStarred(val)}
               onChange={(next) => {
                 setStarred(next);
                 onStarChange?.(card.id, next);

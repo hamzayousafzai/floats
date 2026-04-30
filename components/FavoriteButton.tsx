@@ -17,6 +17,8 @@ export type FavoriteButtonProps = {
   size?: "sm" | "md" | "lg";
   className?: string;
   onChange?: (starred: boolean) => void;
+  /** Fires once after the initial DB fetch resolves (only when initialStarred is not supplied). */
+  onInitialLoad?: (starred: boolean) => void;
   /** NEW: Receives a function that will perform the redirect. */
   onAuthRedirect?: (redirectAction: () => void) => void;
   disabled?: boolean; // Add disabled prop
@@ -31,6 +33,7 @@ export default memo(function FavoriteButton({
   size = "md",
   className = "",
   onChange,
+  onInitialLoad,
   onAuthRedirect,
   disabled = false, // Destructure and default
 }: FavoriteButtonProps) {
@@ -69,20 +72,21 @@ export default memo(function FavoriteButton({
         if (!active) return;
         if (error) {
           console.error("FavoriteButton load error:", error);
-          setStarred(false);
+          if (active) { setStarred(false); onInitialLoad?.(false); }
         } else {
-          setStarred(!!data);
+          const val = !!data;
+          if (active) { setStarred(val); onInitialLoad?.(val); }
         }
       } catch (err) {
         console.error("FavoriteButton load exception:", err);
-        if (active) setStarred(false);
+        if (active) { setStarred(false); onInitialLoad?.(false); }
       } finally {
         if (active) setLoading(false);
       }
     })();
 
     return () => { active = false; };
-  }, [eventId, supabase, initialStarred]);
+  }, [eventId, supabase, initialStarred, onInitialLoad]);
 
   const toggle = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
