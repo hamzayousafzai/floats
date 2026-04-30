@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ExploreCardData } from "@/lib/types";
-import { Calendar, MapPin, X, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, MapPin, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "../FavoriteButton";
 import NotificationBell from "../NotificationBell";
@@ -258,125 +258,200 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
   }, [event?.id]);
 
   return (
-    // Remove the `open` prop and add the `ref` and `onClose` handler
-    <dialog ref={dialogRef} className="modal" onClose={onClose}>
+    <dialog
+      ref={dialogRef}
+      className="fixed inset-0 m-0 max-w-full w-full h-full max-h-full bg-transparent p-0 backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+      onClose={onClose}
+    >
       {event && (
-        <div className="modal-box border border-base-300 bg-base-300">
-          {/* The form with method="dialog" is correct and should stay */}
-          <form method="dialog">
-            <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10"><X /></button>
-          </form>
+        <div className="flex flex-col h-full max-w-lg mx-auto bg-white overflow-hidden">
+          {/* ── Hero image ───────────────────────────────── */}
+          <div className="relative flex-shrink-0 h-64 bg-gray-100">
+            {sortedImages.length > 0 ? (
+              <>
+                <Image
+                  src={sortedImages[currentImageIndex].image_url}
+                  alt={`${event.title} image ${currentImageIndex + 1}`}
+                  fill
+                  className="object-cover"
+                  key={sortedImages[currentImageIndex].image_url}
+                  priority
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20" />
 
-          {sortedImages.length > 0 && (
-            <figure className="relative h-48 -mx-6 -mt-6 mb-4 bg-gray-200 rounded-t-lg overflow-hidden">
-              {/* Image Display */}
-              <Image 
-                src={sortedImages[currentImageIndex].image_url} 
-                alt={`${event.title} image ${currentImageIndex + 1}`} 
-                fill 
-                className="object-cover"
-                key={sortedImages[currentImageIndex].image_url}
-              />
+                {/* Carousel arrows */}
+                {sortedImages.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevImage}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
 
-              {/* Carousel Controls Wrapper - Only show if there is more than one image */}
-              {sortedImages.length > 1 && (
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-between pointer-events-none">
-                  <button 
-                    onClick={prevImage} 
-                    className="btn btn-ghost btn-circle btn-sm ml-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition pointer-events-auto"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <button 
-                    onClick={nextImage} 
-                    className="btn btn-ghost btn-circle btn-sm mr-2 text-white bg-black/60 hover:bg-black/80 active:bg-black/100 border-none transition pointer-events-auto"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              )}
-            </figure>
-          )}
+                    {/* Dot indicators */}
+                    <div className="absolute bottom-3 inset-x-0 flex justify-center gap-1.5">
+                      {sortedImages.map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentImageIndex(i)}
+                          className={`h-1.5 rounded-full transition-all ${
+                            i === currentImageIndex ? "w-4 bg-white" : "w-1.5 bg-white/50"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gray-100">
+                <span className="text-gray-300 text-sm">No image</span>
+              </div>
+            )}
 
-          <div className="p-4">
-            <div className="flex items-start">
-              <h3 className="text-xl font-bold mb-2 flex-1">{event.title}</h3>
-              <div className="flex items-center gap-3 ml-auto">
+            {/* Back button */}
+            <form method="dialog">
+              <button className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 transition backdrop-blur-sm">
+                <ChevronLeft size={20} />
+              </button>
+            </form>
+
+            {/* Action buttons over image */}
+            <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+              <div className="rounded-full bg-black/40 backdrop-blur-sm p-0.5">
                 <NotificationBell
                   eventId={event.id}
                   seriesId={event.series_id}
-                  visible={starred} // <-- ADD THIS: Show the bell only when starred
+                  visible={starred}
                   initialNotified={notified}
                   initialFollowing={following}
-                  onNotifyChange={handleNotifyChange} // <-- FIX THIS: Use the correct callback
-                  onFollowChange={handleFollowChange} // <-- ADD THIS: Pass the follow callback
-                  disabled={isPreview || event.is_past} // Disable if in preview or event is past
+                  onNotifyChange={handleNotifyChange}
+                  onFollowChange={handleFollowChange}
+                  disabled={isPreview || event.is_past}
                 />
+              </div>
+              <div className={`rounded-full backdrop-blur-sm p-0.5 transition-colors ${starred ? "bg-amber-400/90" : "bg-black/40"}`}>
                 <FavoriteButton
                   eventId={event.id}
                   seriesId={event.series_id ?? null}
                   startsAt={event.starts_at ?? null}
                   initialStarred={starred}
-                  variant="pill"
+                  variant="icon"
                   size="md"
                   onChange={handleFavoriteChange}
                   onAuthRedirect={handleAuthRedirect}
-                  disabled={isPreview || event.is_past} // Disable if in preview mode or event is past
+                  disabled={isPreview || event.is_past}
+                  className={starred ? "text-white hover:text-white" : "text-white/80 hover:text-white"}
                 />
               </div>
             </div>
+          </div>
 
-            {event.description ? <p className="py-4 text-sm">{event.description}</p> : null}
+          {/* ── Scrollable body ──────────────────────────── */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-5 pt-5 pb-8 space-y-5">
 
-            <div className="mt-2 space-y-2 text-sm">
-              {event.starts_at && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                  <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-gray-500" />
-                <span>{event.address}</span>
+              {/* Title + categories */}
+              <div>
+                <h2 className="text-2xl font-bold leading-tight text-gray-900">
+                  {event.title}
+                </h2>
+                {event.categories && event.categories.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {event.categories.map((cat: string) => (
+                      <span
+                        key={cat}
+                        className="rounded-full border border-gray-200 bg-gray-50 px-3 py-0.5 text-xs text-gray-500 capitalize"
+                      >
+                        {cat.replace(/-/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
 
-            {/* Primary CTA: full-width Check In */}
-            {event.starts_at && (
-              <div className="mt-4">
+              {/* Date + Address block */}
+              <div className="space-y-2.5 text-sm text-gray-700">
+                {event.starts_at && (
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-4 w-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                    <span>{formatEventTimeRange(event.starts_at, event.ends_at)}</span>
+                  </div>
+                )}
+                {event.address && (
+                  <div className="flex items-start gap-3">
+                    <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                    <span>{event.address}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Check-in */}
+              {event.starts_at && (
                 <CheckInButton
                   eventId={event.id}
                   startsAt={event.starts_at}
                   endsAt={event.ends_at ?? null}
                   autoRun={searchParams.get("doCheckIn") === "1"}
                   initialChecked={alreadyChecked}
-                  disabled={isPreview || event.is_past} // Pass the isPreview prop or if event is past
-                  onAuthRedirect={handleAuthRedirect} // Pass the auth redirect handler
+                  disabled={isPreview || event.is_past}
+                  onAuthRedirect={handleAuthRedirect}
                 />
-              </div>
-            )}
-
-            {/* Secondary actions */}
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 modal-action">
-              {canGetDirections && (
-                <a href={getDirectionsUrl()} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
-                  <Navigation className="h-4 w-4" /> Get Directions
-                </a>
               )}
 
-              <a href={`/api/events/${event.id}/ics?reminderDays=2`} className="btn btn-outline" download>
-                <Download className="h-4 w-4" /> Add to Calendar
-              </a>
+              {/* Action buttons */}
+              <div className="space-y-2.5">
+                {canGetDirections && (
+                  <a
+                    href={getDirectionsUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-900 py-3.5 text-sm font-semibold text-white hover:bg-gray-800 active:bg-black transition-colors"
+                  >
+                    <Navigation className="h-4 w-4" />
+                    Get Directions
+                  </a>
+                )}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <a
+                    href={`/api/events/${event.id}/ics?reminderDays=2`}
+                    download
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Add to Calendar
+                  </a>
+                  <button
+                    type="button"
+                    onClick={shareEvent}
+                    className="flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </button>
+                </div>
+              </div>
 
-              <button type="button" onClick={shareEvent} className="btn btn-outline">
-                <Share2 className="h-4 w-4" /> Share
-              </button>
+              {/* About section */}
+              {event.description && (
+                <div>
+                  <h3 className="mb-2 text-base font-semibold text-gray-900">About</h3>
+                  <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-line">
+                    {event.description}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
-      {/* This form for backdrop click is also correct and should stay */}
-      <form method="dialog" className="modal-backdrop"><button>close</button></form>
     </dialog>
   );
 }

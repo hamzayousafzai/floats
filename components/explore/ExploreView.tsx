@@ -93,7 +93,7 @@ export default function ExploreView({
 
 
   return (
-    <div className="flex flex-col h-full bg-base-200">
+    <div className="flex flex-col h-full bg-gray-50">
       <ExploreFilters
         currentFilters={currentFilters}
         onFilterChange={handleFilterChange}
@@ -102,32 +102,47 @@ export default function ExploreView({
         availableCategories={availableCategories}
       />
 
-      {/* 5. Attach the ref to the scroll container */}
-      <main 
+      <main
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto p-4"
+        className="flex-1 overflow-y-auto"
       >
-        <FeaturedCarousel
-          featuredCards={featuredCards}
-          onCardClick={(card) => handleCardClick(card.id)}
-        />
-
-        {initialCards.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {initialCards.map((card) => (
-              <EventCard
-                key={card.id}
-                card={card}
-                onClick={() => handleCardClick(card.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center text-gray-500 mt-16">
-            <h3 className="text-lg font-semibold">No Events Found</h3>
-            <p>Try adjusting your filters.</p>
-          </div>
+        {/* Featured section */}
+        {featuredCards.length > 0 && (
+          <section className="pt-5 pb-2">
+            <h2 className="px-4 mb-3 text-sm font-semibold text-gray-500 uppercase tracking-widest">
+              Featured
+            </h2>
+            <FeaturedCarousel
+              featuredCards={featuredCards}
+              onCardClick={(card) => handleCardClick(card.id)}
+            />
+          </section>
         )}
+
+        {/* All events section */}
+        <section className="px-4 pt-4 pb-6">
+          {featuredCards.length > 0 && (
+            <h2 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-widest">
+              All Events
+            </h2>
+          )}
+          {initialCards.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {initialCards.map((card) => (
+                <EventCard
+                  key={card.id}
+                  card={card}
+                  onClick={() => handleCardClick(card.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-gray-400 mt-16 px-4">
+              <p className="text-base font-semibold text-gray-500">No events found</p>
+              <p className="text-sm mt-1">Try adjusting your filters or search.</p>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

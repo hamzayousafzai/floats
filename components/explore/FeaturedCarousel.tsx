@@ -77,14 +77,14 @@ export default function FeaturedCarousel({
             if ((item as any).type === "action" && (item as ActionCard).id === "__view_past__") {
               const label = (item as ActionCard).label ?? "View All Past Favorites";
               return (
-                <div key="__view_past__" className="carousel-item w-64 shrink-0">
+                <div key="__view_past__" className="carousel-item w-56 shrink-0">
                   <button
                     onClick={() => onAction?.("view-past")}
                     aria-label="View all past favorites"
-                    className="w-64 min-w-[16rem] cursor-pointer rounded-lg overflow-hidden border shadow-sm hover:shadow-md transition text-left"
+                    className="w-56 min-w-[14rem] cursor-pointer rounded-2xl overflow-hidden border border-black/5 shadow-sm hover:shadow-md transition text-left bg-white"
                   >
-                    <div className="relative h-40 bg-base-100 flex items-center justify-center">
-                      <span className="text-sm font-medium">+ {label}</span>
+                    <div className="relative h-36 bg-gray-100 flex items-center justify-center">
+                      <span className="text-sm font-medium text-gray-500">+ {label}</span>
                     </div>
                   </button>
                 </div>
@@ -94,7 +94,7 @@ export default function FeaturedCarousel({
             const card = item as ExploreCardData & { is_past?: boolean };
 
             return (
-              <div key={card.id} className="carousel-item w-64 shrink-0">
+              <div key={card.id} className="carousel-item w-56 shrink-0">
                 <FeaturedEventCard
                   card={card}
                   onClick={(c) => onCardClick?.(c)}

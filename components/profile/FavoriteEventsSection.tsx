@@ -121,33 +121,24 @@ export default function FavoriteEventsSection({ events }: Props) {
               />
             );
           } else {
-            // VISUAL UPDATE: The "Ghost Card" for View Past
             return (
               <div
                 key={item.id}
                 onClick={() => setShowPast(true)}
-                className="
-                  group relative w-full cursor-pointer 
-                  rounded-lg overflow-hidden border border-base-200 shadow-sm 
-                  bg-base-100 hover:shadow-md transition-all
-                "
+                className="group relative w-full cursor-pointer rounded-2xl overflow-hidden border border-black/5 shadow-sm bg-white hover:shadow-md transition-shadow"
                 role="button"
               >
-                {/* Top Area: Placeholder Pattern */}
-                <div className="h-40 bg-base-200/50 flex items-center justify-center group-hover:bg-base-200 transition-colors">
-                  <div className="rounded-full bg-base-100 p-3 shadow-sm">
-                    {/* FIX: Simplified to a single, clean Clock Icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-base-content/50">
+                <div className="h-44 bg-gray-100 flex items-center justify-center group-hover:bg-gray-50 transition-colors">
+                  <div className="rounded-full bg-white p-3 shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
                       <circle cx="12" cy="12" r="10" />
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
                   </div>
                 </div>
-
-                {/* Bottom Area: Label */}
-                <div className="p-4 text-center">
-                  <h3 className="text-sm font-semibold text-base-content">{item.label}</h3>
-                  <p className="text-xs text-base-content/60 mt-1">{item.count} archived</p>
+                <div className="p-3.5 text-center">
+                  <h3 className="text-sm font-semibold text-gray-900">{item.label}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{item.count} archived</p>
                 </div>
               </div>
             );
