@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { Calendar } from "lucide-react";
+import { Clock } from "lucide-react";
+import { useEffect, useState } from "react";
 import FavoriteButton from "@/components/FavoriteButton";
-// use the shared ExploreCardData shape
 import type { ExploreCardData } from "./EventCard";
 
 export type FeaturedCardData = ExploreCardData;
@@ -16,15 +16,26 @@ export default function FeaturedEventCard({
 }: {
   card: FeaturedCardData;
   onClick?: (c: FeaturedCardData) => void;
-  // updated: accept (id, next) so parent can update by id
   onStarChange?: (id: string, next: boolean) => void;
   className?: string;
 }) {
+  const startDate = card.starts_at ? new Date(card.starts_at) : null;
+  const endDate = card.ends_at ? new Date(card.ends_at) : null;
+  const now = new Date();
 
-  const formatEventTimeRange = (startsAt: string, endsAt?: string | null) => {
-    const startDate = new Date(startsAt);
+  const isLive = startDate && endDate && now >= startDate && now <= endDate;
 
-    const startFormatted = startDate.toLocaleString("en-US", {
+  // Track starred locally so the button wrapper can respond visually
+  const [starred, setStarred] = useState<boolean>(card.is_starred ?? false);
+
+  // Re-sync local state if the card prop changes (e.g. parent updates is_starred externally)
+  useEffect(() => {
+    setStarred(card.is_starred ?? false);
+  }, [card.id, card.is_starred]);
+
+  const formatTimeRange = (startsAt: string, endsAt?: string | null) => {
+    const start = new Date(startsAt);
+    const startStr = start.toLocaleString("en-US", {
       timeZone: "America/New_York",
       weekday: "short",
       month: "short",
@@ -33,100 +44,105 @@ export default function FeaturedEventCard({
       minute: "2-digit",
       hour12: true,
     });
-
-    if (!endsAt) {
-      return startFormatted;
-    }
-
-    const endDate = new Date(endsAt);
-    const isSameDay = startDate.toDateString() === endDate.toDateString();
-
-    if (isSameDay) {
-      // Same day - show end time only
-      const endTime = endDate.toLocaleString("en-US", {
+    if (!endsAt) return startStr;
+    const end = new Date(endsAt);
+    if (start.toDateString() === end.toDateString()) {
+      const endTime = end.toLocaleString("en-US", {
         timeZone: "America/New_York",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
       });
-      return `${startFormatted} - ${endTime}`;
-    } else {
-      // Different days - show full end date/time
-      const endFormatted = endDate.toLocaleString("en-US", {
-        timeZone: "America/New_York",
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
-      return `${startFormatted} - ${endFormatted}`;
+      return `${startStr} – ${endTime}`;
     }
+    return startStr;
   };
 
-  const dateText = card.starts_at
-    ? formatEventTimeRange(card.starts_at, card.ends_at)
-    : "";
+  const dateText = card.starts_at ? formatTimeRange(card.starts_at, card.ends_at) : "";
 
   return (
     <article
       onClick={() => onClick?.(card)}
-      className={`w-64 min-w-[16rem] cursor-pointer rounded-lg overflow-hidden border shadow-sm ${className}`}
+      className={`w-56 min-w-[14rem] cursor-pointer rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow border border-black/5 ${className}`}
       role="button"
       aria-label={card.title ?? "event"}
     >
-      <div className="relative h-40 bg-base-200">
+      {/* Hero image */}
+      <div className="relative h-36 bg-gray-100">
         {card.image_url ? (
           <Image
             src={card.image_url}
             alt={card.title ?? "event image"}
             fill
-            // PAST: dim/grayscale past cards
-            className={`object-cover ${card.is_past ? "grayscale opacity-70" : ""}`}
+            className={`object-cover ${card.is_past ? "grayscale opacity-60" : ""}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-sm text-gray-500">
+          <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
             No image
           </div>
         )}
-        {/* PAST badge */}
-        {card.is_past && (
-          <span className="badge badge-neutral absolute left-2 top-2">PAST</span>
-        )}
-      </div>
 
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm font-semibold line-clamp-2">{card.title}</h3>
+        {/* Gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
 
-          <div onClick={(e) => e.stopPropagation()}>
+        {/* Top badges */}
+        <div className="absolute left-2 top-2">
+          {isLive && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-white shadow">
+              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              Live
+            </span>
+          )}
+          {card.is_past && (
+            <span className="rounded-full bg-gray-700/80 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+              Past
+            </span>
+          )}
+        </div>
+
+        {/* Favorite button */}
+        <div
+          className="absolute right-2 top-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className={`rounded-full backdrop-blur-sm p-0.5 transition-colors ${starred ? "bg-amber-400/90" : "bg-black/40"}`}>
             <FavoriteButton
               eventId={card.id}
               initialStarred={card.is_starred ?? undefined}
               variant="icon"
-              // pass card id along with next state
-              onChange={(next) => onStarChange?.(card.id, next)}
+              className={starred ? "text-white hover:text-white" : "text-white/80 hover:text-white"}
+              onInitialLoad={(val) => setStarred(val)}
+              onChange={(next) => {
+                setStarred(next);
+                onStarChange?.(card.id, next);
+              }}
             />
           </div>
         </div>
+      </div>
 
-        {/* Keep showing date/time for past cards as well */}
-        {dateText && <p className="text-xs text-gray-500 mt-1">{dateText}</p>}
+      {/* Body */}
+      <div className="p-3">
+        <h3 className="text-sm font-semibold leading-snug line-clamp-2 text-gray-900">
+          {card.title}
+        </h3>
 
-        {card.address && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-base-content/70">
-            <Calendar className="h-3.5 w-3.5" />
-            <span className="truncate">{card.address}</span>
+        {dateText && (
+          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-gray-500">
+            <Clock className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate">{dateText}</span>
           </div>
         )}
 
         {card.categories && card.categories.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {card.categories.slice(0, 3).map((cat) => (
-              <div key={cat} className="badge badge-outline badge-sm">
+          <div className="mt-2 flex flex-wrap gap-1">
+            {card.categories.slice(0, 2).map((cat) => (
+              <span
+                key={cat}
+                className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] text-gray-500 capitalize"
+              >
                 {cat.replace(/-/g, " ")}
-              </div>
+              </span>
             ))}
           </div>
         )}
