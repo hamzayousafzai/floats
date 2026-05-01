@@ -2,7 +2,8 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import EditOrgForm from "@/components/admin/EditOrgForm"; // We will create this next
 
-export default async function EditOrgPage({ params }: { params: { id: string } }) {
+export default async function EditOrgPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -13,7 +14,7 @@ export default async function EditOrgPage({ params }: { params: { id: string } }
   if (!isAdmin) return notFound();
 
   // Fetch the specific organization to edit
-  const { data: org, error } = await supabase.from('orgs').select('*').eq('id', params.id).single();
+  const { data: org, error } = await supabase.from('orgs').select('*').eq('id', id).single();
 
   if (error || !org) {
     return notFound();

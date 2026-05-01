@@ -2,6 +2,7 @@
 import { Star, Ticket, Bell } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import React from "react";
+import BadgesDetailModal from "@/components/profile/BadgesDetailModal";
 
 const ICONS = { star: Star, ticket: Ticket, bell: Bell } as const;
 type IconKey = keyof typeof ICONS;
@@ -29,7 +30,7 @@ function tierColorHex(tier: Tier): string {
     case "Gold": return "#eab308";     // yellow-500
     case "Silver": return "#94a3b8";   // slate-400
     case "Bronze": return "#d97706";   // amber-600
-    case "Platinum": return "#d4d4d8"; // zinc-300
+    case "Platinum": return "#a1a1aa"; // zinc-400
     default: return "#9ca3af";         // gray-400 (locked)
   }
 }
@@ -59,6 +60,7 @@ function progressPercent(b: BadgeRowItem): number {
 }
 
 export default function BadgeRow({ badges }: { badges: any[] }) {
+  const [showModal, setShowModal] = useState(false);
   const [openSlug, setOpenSlug] = useState<BadgeRowItem["slug"] | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -93,9 +95,19 @@ export default function BadgeRow({ badges }: { badges: any[] }) {
 
   return (
     <>
-      <h3 className="mb-2 text-sm font-semibold">My Badges</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-semibold">Your Progress</h3>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="text-xs text-base-content/50 hover:text-base-content/80 transition-colors flex items-center gap-1"
+        >
+          View all badges
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
 
-      <section className="rounded-xl border px-6 sm:px-8 py-3">
+      <section className="rounded-xl border px-6 sm:px-8 py-4">
         <div className="flex items-center justify-between gap-3">
           {items.map((b) => {
             const Icon = ICONS[b.icon_key];
@@ -152,14 +164,32 @@ export default function BadgeRow({ badges }: { badges: any[] }) {
                   </div>
                 </div>
 
-                <div className="mt-2 text-xs text-base-content/60">
+                <div className="mt-2 text-xs font-medium text-base-content/70">
                   {displayName}
+                </div>
+                <div className="text-[10px] font-semibold mt-0.5" style={{ color: tierColorHex(b.current_tier) }}>
+                  {b.current_tier ?? "Locked"}
+                </div>
+                {/* Progress label */}
+                <div className="text-[10px] text-base-content/40 mt-0.5">
+                  {b.next_threshold != null ? `${b.progress}/${b.next_threshold}` : `${b.progress}`}
+                  {b.current_tier && b.next_threshold != null ? (
+                    <span className="ml-1 font-medium" style={{ color: tierColorHex(b.current_tier) }}>
+                      {b.current_tier === "Bronze" ? "to Silver" : b.current_tier === "Silver" ? "to Gold" : b.current_tier === "Gold" ? "to Platinum" : ""}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             );
           })}
         </div>
+
+
       </section>
+
+      {showModal && (
+        <BadgesDetailModal badges={badges} onClose={() => setShowModal(false)} />
+      )}
     </>
   );
 }

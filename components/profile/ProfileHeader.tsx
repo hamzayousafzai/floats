@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Settings } from "lucide-react";
 import SignOutButton from "@/components/SignOutButton";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -64,19 +65,26 @@ export default function ProfileHeader({ user }: Props) {
     <>
       <section className="flex items-start justify-between">
         <div className="flex gap-4">
-          <button
-            onClick={openSettings}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white text-lg font-medium hover:bg-gray-800 transition-colors"
-            title="Settings"
-          >
+          {/* Static avatar — no longer opens settings */}
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white text-lg font-medium flex-shrink-0">
             {initials}
-          </button>
+          </div>
           <div>
             <h1 className="text-lg font-semibold">{user.user_metadata?.name || "Your Profile"}</h1>
             <p className="text-sm text-gray-600">{user.email}</p>
           </div>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openSettings}
+            className="btn btn-ghost btn-sm btn-circle"
+            title="Manage Account"
+            aria-label="Manage Account"
+          >
+            <Settings size={18} className="text-gray-500" />
+          </button>
+          <SignOutButton />
+        </div>
       </section>
 
       {/* Settings Panel with animation */}
@@ -96,7 +104,7 @@ export default function ProfileHeader({ user }: Props) {
             <div className="flex h-full flex-col pb-10"> {/* Add bottom padding for nav */}
               {/* Header */}
               <div className="flex items-center justify-between border-b px-4 py-3">
-                <h2 className="text-lg font-semibold">Settings</h2>
+                <h2 className="text-lg font-semibold">Manage Account</h2>
                 <button
                   onClick={closeSettings}
                   className="btn btn-ghost btn-sm btn-circle"

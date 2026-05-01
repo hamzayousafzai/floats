@@ -24,13 +24,6 @@ export default async function ProfilePage() {
     .single();
   const isAdmin = !!adminRecord;
 
-  // Get count of events with notifications enabled
-  const { count: remindedCount } = await supabase
-    .from("event_notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("notify", true);
-
   // Get count of user check-ins
   const { count: checkinCount } = await supabase
     .from("check_ins")
@@ -166,52 +159,43 @@ export default async function ProfilePage() {
         <ProfileStats
           favoriteCount={favoriteCount}
           checkinCount={checkinCount ?? 0}
-          checkedInEvents={checkedInEvents}
         />
 
-        {/* VISUAL UPDATE: Changed bg-base-300 to bg-base-100 (White Card) */}
-        <div className="rounded-2xl bg-base-100 p-5 space-y-5 shadow-sm">
-          {isAdmin ? (
-            <>
-              <section className="space-y-3">
-                <section>
-                  <Link 
-                    href="/admin" 
-                    className="btn btn-ghost bg-base-200/50 w-full justify-between font-medium hover:bg-base-200"
-                  >
-                    <span>Admin Panel</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="m9 18 6-6-6-6"/></svg>
-                  </Link>
-                </section>
-                <SwitchViewButton />
-              </section>
-              
-              <div className="h-px bg-base-content/5 w-full"></div>
-              
-              <div>
-                {/* FIX: Removed duplicate "My Badges" header */}
-                <BadgeRow badges={badgeRows ?? []} />
-              </div>
-            </>
-          ) : (
-            <div>
-              {/* FIX: Removed duplicate "My Badges" header */}
-              <BadgeRow badges={badgeRows ?? []} />
-            </div>
+        {/* Progress / Badges card — always visible */}
+        <div className="rounded-2xl bg-base-100 p-5 shadow-sm">
+          <BadgeRow badges={badgeRows ?? []} />
+        </div>
+
+        {/* Account actions card */}
+        <div className="rounded-2xl bg-base-100 p-5 space-y-3 shadow-sm">
+          {/* Admin Panel — admins only */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="btn btn-ghost bg-base-200/50 w-full justify-between font-medium hover:bg-base-200"
+            >
+              <span className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><rect width="3" height="11" x="2" y="12"/><rect width="3" height="7" x="9" y="8"/><rect width="3" height="15" x="16" y="4"/></svg>
+                Admin Panel
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50"><path d="m9 18 6-6-6-6"/></svg>
+            </Link>
           )}
+
+          <SwitchViewButton />
         </div>
 
         <div className="divider opacity-50"></div>
 
-        {favoriteCount === 0 ? (
+        {favoriteCount === 0 && checkedInEvents.length === 0 ? (
           <div className="rounded-xl border border-dashed border-base-content/20 px-6 py-10 text-center bg-base-100">
-            <h3 className="text-lg font-semibold">No Favorites Yet</h3>
+            <h3 className="text-lg font-semibold">No Activity Yet</h3>
             <p className="mt-2 text-sm text-base-content/70">
               Tap the star on an event to save it here.
             </p>
           </div>
         ) : (
-          <FavoriteEventsSection events={favoriteEvents} />
+          <FavoriteEventsSection events={favoriteEvents} checkedInEvents={checkedInEvents} />
         )}
       </div>
     </main>
