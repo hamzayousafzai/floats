@@ -28,6 +28,7 @@ export default function FavoriteEventsSection({ events, checkedInEvents = [] }: 
     is_notified: !!e.is_notified,
     series_id: e.series_id ?? null,
     event_media: e.event_media ?? null,
+    event_url: e.event_url ?? null,
   });
 
   const [cards, setCards] = useState<ExploreCardData[]>(() => events.map(mapEventToCard));

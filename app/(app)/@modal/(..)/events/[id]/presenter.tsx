@@ -14,6 +14,7 @@ type EventRow = {
   latitude: number | null;
   longitude: number | null;
   image_url: string | null;
+  event_url: string | null;
 };
 
 type PresenterProps = {

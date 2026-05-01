@@ -10,7 +10,11 @@
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "db:types": "npx supabase gen types typescript --project-id inxlsvowzpqvfulhbnou --schema public > lib/database.types.ts",
+    "db:dump": "npx supabase db dump --workdir ..\\supabase --linked -f schema.sql",
+    "db:dump:functions": "npx supabase db dump --workdir ..\\supabase --linked --role-only -f roles.sql",
+    "db:pull": "npm run db:types && npm run db:dump && npm run db:dump:functions"
   },
   "dependencies": {
     "@react-email/render": "^2.0.0",

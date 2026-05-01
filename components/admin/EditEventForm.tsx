@@ -102,6 +102,7 @@ type MediaItem = {
 type FormState = {
   title: string;
   description: string;
+  event_url: string;
   dates: { starts_at: string; ends_at: string }[];
   address: string;
   event_media: MediaItem[];
@@ -140,6 +141,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const initialForm: FormState = {
     title: event?.title ?? "",
     description: event?.description ?? "",
+    event_url: (event as any)?.event_url ?? "",
     dates: isEditing && event
       ? [{ starts_at: toInputDatetime(event.starts_at), ends_at: toInputDatetime(event.ends_at) }]
       : [{ starts_at: "", ends_at: "" }],
@@ -372,6 +374,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             is_market: form.is_market,
             is_featured: form.is_featured,
             status: form.status,
+            event_url: form.event_url || null,
           })),
           event_media: uploadedMedia,
           category_ids: Array.from(form.category_ids),
@@ -492,6 +495,23 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             className="textarea textarea-bordered w-full"
             rows={3}
           />
+        </div>
+
+        {/* More Info URL */}
+        <div>
+          <label className="block text-sm font-medium mb-1">More Info URL</label>
+          <input
+            type="text"
+            value={form.event_url}
+            onChange={(e) => update("event_url", e.target.value)}
+            placeholder="https://..."
+            className="input input-bordered w-full"
+          />
+          {isEditing && (event as any)?.series_id && (
+            <p className="mt-1 text-xs text-gray-500">
+              This URL will be updated for all events in this series.
+            </p>
+          )}
         </div>
 
         {/* Multi Image Uploader */}

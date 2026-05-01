@@ -109,6 +109,7 @@ export default function AdminNewEventForm({ orgs }: { orgs: Org[] }) {
     title: "",
     description: "",
     address: "",
+    event_url: "",
     org_id: defaultOrgId,
   });
   const [eventMedia, setEventMedia] = useState<MediaItem[]>([]);
@@ -310,6 +311,7 @@ export default function AdminNewEventForm({ orgs }: { orgs: Org[] }) {
         title: form.title,
         description: form.description,
         address: form.address,
+        event_url: form.event_url || null,
         starts_at: dt.starts_at,
         ends_at: dt.ends_at || null,
       }));
@@ -406,6 +408,18 @@ export default function AdminNewEventForm({ orgs }: { orgs: Org[] }) {
               onChange={(e) => updateForm("address", e.target.value)}
               className="mt-1 w-full rounded border p-2"
             />
+          </div>
+
+          <div>
+            <label className="font-medium">Event URL <span className="text-gray-400 font-normal">(optional)</span></label>
+            <input
+              type="url"
+              value={form.event_url}
+              onChange={(e) => updateForm("event_url", e.target.value)}
+              placeholder="https://..."
+              className="mt-1 w-full rounded border p-2"
+            />
+            <p className="text-xs text-gray-500 mt-1">Link to social media, ticketing, or event website.</p>
           </div>
 
           <div>

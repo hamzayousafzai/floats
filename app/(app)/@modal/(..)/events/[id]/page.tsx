@@ -20,7 +20,7 @@ export default async function InterceptedEventModal({
     .from("events")
     .select(`
       id, title, description, starts_at, ends_at, address, 
-      latitude, longitude, image_url, series_id,
+      latitude, longitude, image_url, series_id, event_url,
       event_media ( image_url, sort_index )
     `)
     .eq("id", id)

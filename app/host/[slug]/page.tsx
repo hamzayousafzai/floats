@@ -131,6 +131,7 @@ export default function HostEventsPage() {
     categories: [],
     // FIX: Pass the fetched event_media data to the modal
     event_media: event.event_media ?? null,
+    event_url: (event as any).event_url ?? null,
   });
 
   return (
