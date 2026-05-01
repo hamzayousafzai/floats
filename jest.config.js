@@ -12,6 +12,8 @@ const customConfig = {
   collectCoverageFrom: [
     "components/explore/**/*.{ts,tsx}",
     "!components/explore/**/*.d.ts",
+    "components/profile/**/*.{ts,tsx}",
+    "!components/profile/**/*.d.ts",
   ],
 };
 

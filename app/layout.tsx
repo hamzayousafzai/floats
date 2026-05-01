@@ -10,9 +10,8 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#ffffffff",
 };
-
-export const themeColor = "#ffffffff";
 
 export const metadata: Metadata = {
   title: "Floats",
