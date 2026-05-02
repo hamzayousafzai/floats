@@ -76,7 +76,7 @@ export default async function ProfilePage() {
 
     const normalize = (ev: EventSelectRow): ExploreCardData => ({
       id: ev.id,
-      title: ev.title,
+      title: ev.title ?? "",
       starts_at: ev.starts_at,
       ends_at: ev.ends_at,
       description: ev.description ?? null,
@@ -119,7 +119,7 @@ export default async function ProfilePage() {
 
   const normalize2 = (ev: EventSelectRow): ExploreCardData => ({
     id: ev.id,
-    title: ev.title,
+    title: ev.title ?? "",
     starts_at: ev.starts_at,
     ends_at: ev.ends_at,
     description: ev.description ?? null,
@@ -149,9 +149,10 @@ export default async function ProfilePage() {
 
     favoriteEvents = (rows ?? []).map((e) => {
       const base = normalize2(e);
+      const v = e.vendors as unknown as { id: string; name: string; slug: string } | null;
       return {
         ...base,
-        vendor: e.vendors ? { id: e.vendors.id, name: e.vendors.name, slug: e.vendors.slug } : null,
+        vendor: v ? { id: v.id, name: v.name, slug: v.slug } : null,
       };
     });
   }

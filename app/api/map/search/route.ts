@@ -125,9 +125,9 @@ export async function GET(req: Request) {
       latitude: number | null;
       longitude: number | null;
       geom: unknown;
-      org: { name: string | null; slug: string | null } | null;
+      org: { name: string | null; slug: string | null }[] | null;
     };
-    const pins: EventPin[] = (data as MapEventRow[] ?? []).map((ev) => {
+    const pins: EventPin[] = ((data ?? []) as unknown as MapEventRow[]).map((ev) => {
       let latVal: number | null = ev.latitude ?? null;
       let lngVal: number | null = ev.longitude ?? null;
 
@@ -147,12 +147,12 @@ export async function GET(req: Request) {
 
       return {
         id: ev.id,
-        vendorSlug: ev.org?.slug ?? "",
-        vendorName: ev.org?.name ?? "",
+        vendorSlug: ev.org?.[0]?.slug ?? "",
+        vendorName: ev.org?.[0]?.name ?? "",
         title: ev.title ?? null,
         description: ev.description ?? null,
-        starts_at: ev.starts_at ?? null,
-        ends_at: ev.ends_at ?? null,
+        starts_at: ev.starts_at ?? "",
+        ends_at: ev.ends_at ?? "",
         address: ev.address ?? null,
         lat: latVal,
         lng: lngVal,
