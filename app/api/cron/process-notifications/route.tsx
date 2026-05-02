@@ -53,12 +53,12 @@ export async function GET(request: Request) {
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', job.id);
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(`Cron Error: Failed to process job ${job.id}`, e);
       // 5. Mark job as 'failed' on error
       await supabaseAdmin
         .from('event_notification_queue')
-        .update({ status: 'failed', error_message: e.message })
+        .update({ status: 'failed', error_message: e instanceof Error ? e.message : String(e) })
         .eq('id', job.id);
     }
   });

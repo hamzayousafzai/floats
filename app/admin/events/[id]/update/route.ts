@@ -57,8 +57,9 @@ export async function POST(
     }
     // --- END OF LOGIC ---
 
+    type MediaItem = { image_url?: string; sort_index: number };
     // Build ONLY the fields that belong in the events table for the general update
-    const updatePayload: any = {
+    const updatePayload: Record<string, unknown> = {
       title: body.title,
       description: body.description,
       starts_at: convertToUTC(body.starts_at),
@@ -72,7 +73,7 @@ export async function POST(
     };
 
     // Set the primary image
-    const primaryImage = event_media?.find((m: any) => m.sort_index === 0);
+    const primaryImage = (event_media as MediaItem[] | undefined)?.find((m) => m.sort_index === 0);
     updatePayload.image_url = primaryImage?.image_url ?? body.image_url ?? null;
 
     // Add geometry if provided
@@ -109,8 +110,8 @@ export async function POST(
     }
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Update route error:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Update failed" }, { status: 500 });
   }
 }

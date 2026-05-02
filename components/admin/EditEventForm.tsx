@@ -141,7 +141,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
   const initialForm: FormState = {
     title: event?.title ?? "",
     description: event?.description ?? "",
-    event_url: (event as any)?.event_url ?? "",
+    event_url: event?.event_url ?? "",
     dates: isEditing && event
       ? [{ starts_at: toInputDatetime(event.starts_at), ends_at: toInputDatetime(event.ends_at) }]
       : [{ starts_at: "", ends_at: "" }],
@@ -507,7 +507,7 @@ export default function EditEventForm({ event, orgId, allCategories, currentCate
             placeholder="https://..."
             className="input input-bordered w-full"
           />
-          {isEditing && (event as any)?.series_id && (
+          {isEditing && event?.series_id && (
             <p className="mt-1 text-xs text-gray-500">
               This URL will be updated for all events in this series.
             </p>

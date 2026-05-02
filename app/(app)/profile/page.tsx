@@ -8,6 +8,22 @@ import ProfileHeader from "@/components/profile/ProfileHeader";
 import SwitchViewButton from "@/components/profile/SwitchViewButton";
 import ProfileStats from "@/components/profile/ProfileStats";
 import BadgeRow from "@/components/profile/BadgeRow";
+import type { ExploreCardData } from "@/lib/types";
+
+type EventSelectRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  address: string | null;
+  image_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  series_id: string | null;
+  event_media: { image_url: string; sort_index: number }[] | null;
+  categories?: string[] | null;
+};
 
 export default async function ProfilePage() {
   const supabase = await createSupabaseServer();
@@ -46,7 +62,7 @@ export default async function ProfilePage() {
     new Set((checkinRows ?? []).map(r => String(r.event_id)))
   );
 
-  let checkedInEvents: Array<any> = [];
+  let checkedInEvents: Array<ExploreCardData & { checked_in_at: string }> = [];
 
   if (checkinEventIds.length) {
     const { data: rows } = await supabase
@@ -58,7 +74,7 @@ export default async function ProfilePage() {
       `)
       .in("id", checkinEventIds);
 
-    const normalize = (ev: any) => ({
+    const normalize = (ev: EventSelectRow): ExploreCardData => ({
       id: ev.id,
       title: ev.title,
       starts_at: ev.starts_at,
@@ -76,7 +92,7 @@ export default async function ProfilePage() {
 
     checkedInEvents =
       (rows ?? [])
-        .map((e: any) => ({
+        .map((e) => ({
           ...normalize(e),
           checked_in_at: checkedAtMap.get(String(e.id)) as string,
         }))
@@ -101,7 +117,7 @@ export default async function ProfilePage() {
 
   const notifiedEventIds = new Set(notificationRows?.map(r => r.event_id) ?? []);
 
-  const normalize2 = (ev: any) => ({
+  const normalize2 = (ev: EventSelectRow): ExploreCardData => ({
     id: ev.id,
     title: ev.title,
     starts_at: ev.starts_at,
@@ -118,7 +134,7 @@ export default async function ProfilePage() {
     is_notified: notifiedEventIds.has(ev.id),
   });
 
-  let favoriteEvents: Array<any> = [];
+  let favoriteEvents: ExploreCardData[] = [];
 
   if (eventIds.length) {
     const { data: rows } = await supabase
@@ -131,7 +147,7 @@ export default async function ProfilePage() {
       `)
       .in("id", eventIds);
 
-    favoriteEvents = (rows ?? []).map((e: any) => {
+    favoriteEvents = (rows ?? []).map((e) => {
       const base = normalize2(e);
       return {
         ...base,

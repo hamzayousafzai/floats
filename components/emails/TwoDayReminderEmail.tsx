@@ -9,7 +9,7 @@ export const TwoDayReminderEmail: React.FC<Readonly<EmailProps>> = ({ eventTitle
   <div>
     <h1>Reminder for {eventTitle}</h1>
     <p>
-      This is a friendly reminder that the event you're following, <strong>{eventTitle}</strong>, is happening in two days!
+      This is a friendly reminder that the event you&apos;re following, <strong>{eventTitle}</strong>, is happening in two days!
     </p>
     <p>
       You can view the event details here: 

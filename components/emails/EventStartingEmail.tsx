@@ -9,7 +9,7 @@ export const EventStartingEmail: React.FC<Readonly<EmailProps>> = ({ eventTitle,
   <div>
     <h1>{eventTitle} is starting soon!</h1>
     <p>
-      The event you're following, <strong>{eventTitle}</strong>, is about to begin.
+      The event you&apos;re following, <strong>{eventTitle}</strong>, is about to begin.
     </p>
     <p>
       We hope you have a great time!

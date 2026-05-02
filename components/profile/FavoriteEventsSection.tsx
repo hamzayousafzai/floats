@@ -9,12 +9,12 @@ import type { ExploreCardData } from "@/lib/types";
 
 type CheckedInCard = ExploreCardData & { checked_in_at: string };
 type Props = {
-  events: Array<any>;
+  events: ExploreCardData[];
   checkedInEvents?: CheckedInCard[];
 };
 
 export default function FavoriteEventsSection({ events, checkedInEvents = [] }: Props) {
-  const mapEventToCard = (e: any): ExploreCardData => ({
+  const mapEventToCard = (e: ExploreCardData): ExploreCardData => ({
     id: String(e.id),
     title: e.title ?? "",
     starts_at: e.starts_at ?? null,
@@ -44,7 +44,7 @@ export default function FavoriteEventsSection({ events, checkedInEvents = [] }: 
     const now = new Date();
     const deco = cards.map((c) => {
       const starts = c.starts_at ? new Date(c.starts_at) : null;
-      const ends = (c as any).ends_at ? new Date((c as any).ends_at) : null;
+      const ends = c.ends_at ? new Date(c.ends_at) : null;
       const isPast = ends ? ends < now : starts ? starts < now : false;
       return { ...c, is_past: isPast };
     });

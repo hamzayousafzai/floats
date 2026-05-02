@@ -34,9 +34,10 @@ export default function FeaturedEventCard({
   }, [card.id, card.is_starred]);
 
   const formatTimeRange = (startsAt: string, endsAt?: string | null) => {
+    const TZ = "America/New_York";
     const start = new Date(startsAt);
     const startStr = start.toLocaleString("en-US", {
-      timeZone: "America/New_York",
+      timeZone: TZ,
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -46,9 +47,11 @@ export default function FeaturedEventCard({
     });
     if (!endsAt) return startStr;
     const end = new Date(endsAt);
-    if (start.toDateString() === end.toDateString()) {
+    const dateFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+    const isSameDay = dateFmt.format(start) === dateFmt.format(end);
+    if (isSameDay) {
       const endTime = end.toLocaleString("en-US", {
-        timeZone: "America/New_York",
+        timeZone: TZ,
         hour: "numeric",
         minute: "2-digit",
         hour12: true,

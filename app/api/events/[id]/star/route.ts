@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const starPayload: EventStarsInsert = { event_id: eventId, user_id: user.id };
       const { error: insertError } = await supabaseAdmin
         .from("event_stars")
-        .insert([starPayload as any]);
+        .insert([starPayload]);
       if (insertError) throw new Error(insertError.message);
 
       // If event has a series, auto-follow series (upsert) but only for future/ongoing occurrences
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       return NextResponse.json({ starred: true });
     }
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || String(err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

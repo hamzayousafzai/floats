@@ -102,12 +102,12 @@ export default function HostEventsPage() {
     try {
       setDeletingId(id);
       const res = await fetch(`/admin/events/${id}/delete`, { method: 'DELETE' }); // CHANGED
-      const data = await res.json().catch(() => ({} as any));
+      const data = await res.json().catch(() => ({} as Record<string, unknown>));
       if (!res.ok || !data?.ok) throw new Error(data?.error || 'Failed to delete event');
 
       setEvents((prev) => prev.filter((e) => e.id !== id));
-    } catch (err: any) {
-      alert(`Error deleting event: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error deleting event: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setDeletingId(null);
     }
@@ -131,7 +131,7 @@ export default function HostEventsPage() {
     categories: [],
     // FIX: Pass the fetched event_media data to the modal
     event_media: event.event_media ?? null,
-    event_url: (event as any).event_url ?? null,
+    event_url: event.event_url ?? null,
   });
 
   return (

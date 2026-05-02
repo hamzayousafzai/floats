@@ -14,6 +14,10 @@ type Props = {
   title?: string | null;
 };
 
+function isActionCard(item: ExploreCardData | ActionCard): item is ActionCard {
+  return "type" in item && (item as ActionCard).type === "action";
+}
+
 export default function FeaturedCarousel({
   featuredCards,
   onCardClick,
@@ -21,7 +25,7 @@ export default function FeaturedCarousel({
   onAction,
   title,
 }: Props) {
-  if (!featuredCards || featuredCards.length === 0) return null;
+  const isEmpty = !featuredCards || featuredCards.length === 0;
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScroll, setCanScroll] = useState(false);
@@ -41,6 +45,8 @@ export default function FeaturedCarousel({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [refreshScrollability]);
+
+  if (isEmpty) return null;
 
   const nudge = (dir: 1 | -1) => {
     const el = scrollerRef.current;
@@ -74,7 +80,7 @@ export default function FeaturedCarousel({
           onWheel={handleWheel}
         >
           {featuredCards.map((item) => {
-            if ((item as any).type === "action" && (item as ActionCard).id === "__view_past__") {
+            if (isActionCard(item) && item.id === "__view_past__") {
               const label = (item as ActionCard).label ?? "View All Past Favorites";
               return (
                 <div key="__view_past__" className="carousel-item w-56 shrink-0">

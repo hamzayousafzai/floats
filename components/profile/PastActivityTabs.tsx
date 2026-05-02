@@ -72,11 +72,20 @@ function EventRow({
   );
 }
 
+const PAGE_SIZE = 15;
+
 export default function PastActivityTabs({ checkedInEvents, pastFavorites, onEventClick }: Props) {
   const [activeTab, setActiveTab] = useState<"attended" | "past-favorites">("attended");
+  const [attendedVisible, setAttendedVisible] = useState(PAGE_SIZE);
+  const [favoritesVisible, setFavoritesVisible] = useState(PAGE_SIZE);
 
   const hasSomeActivity = checkedInEvents.length > 0 || pastFavorites.length > 0;
   if (!hasSomeActivity) return null;
+
+  const attendedToRender = checkedInEvents.slice(0, attendedVisible);
+  const attendedRemaining = Math.max(0, checkedInEvents.length - attendedVisible);
+  const favoritesToRender = pastFavorites.slice(0, favoritesVisible);
+  const favoritesRemaining = Math.max(0, pastFavorites.length - favoritesVisible);
 
   return (
     <section className="rounded-2xl bg-base-100 shadow-sm overflow-hidden">
@@ -117,7 +126,7 @@ export default function PastActivityTabs({ checkedInEvents, pastFavorites, onEve
             <p className="text-sm text-base-content/50 py-4 text-center">No check-ins yet.</p>
           ) : (
             <div>
-              {checkedInEvents.map((e) => (
+              {attendedToRender.map((e) => (
                 <EventRow
                   key={e.id}
                   event={e}
@@ -125,6 +134,15 @@ export default function PastActivityTabs({ checkedInEvents, pastFavorites, onEve
                   onClick={() => onEventClick(e)}
                 />
               ))}
+              {attendedRemaining > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAttendedVisible((v) => v + PAGE_SIZE)}
+                  className="mt-3 w-full rounded-full py-2 text-sm font-medium bg-base-200 hover:bg-base-200/80 transition-colors"
+                >
+                  Show {attendedRemaining} more
+                </button>
+              )}
             </div>
           )
         ) : (
@@ -132,7 +150,7 @@ export default function PastActivityTabs({ checkedInEvents, pastFavorites, onEve
             <p className="text-sm text-base-content/50 py-4 text-center">No past favorites.</p>
           ) : (
             <div>
-              {pastFavorites.map((e) => (
+              {favoritesToRender.map((e) => (
                 <EventRow
                   key={e.id}
                   event={e}
@@ -140,6 +158,15 @@ export default function PastActivityTabs({ checkedInEvents, pastFavorites, onEve
                   onClick={() => onEventClick(e)}
                 />
               ))}
+              {favoritesRemaining > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFavoritesVisible((v) => v + PAGE_SIZE)}
+                  className="mt-3 w-full rounded-full py-2 text-sm font-medium bg-base-200 hover:bg-base-200/80 transition-colors"
+                >
+                  Show {favoritesRemaining} more
+                </button>
+              )}
             </div>
           )
         )}

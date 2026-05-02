@@ -59,7 +59,7 @@ export function HostProvider({ children }: { children: ReactNode }) {
         // FIX: You MUST add .filter() here to remove nulls before mapping.
         // This resolves the TypeScript error by ensuring all data matches the OrgMember type.
         fetchedOrgs = (data || [])
-          .filter((org): org is { org_id: string; name: string; slug: string; role: any } => 
+          .filter((org): org is { org_id: string; name: string; slug: string; role: string } => 
             org.org_id !== null && org.name !== null && org.slug !== null && org.role !== null
           )
           .map(org => ({

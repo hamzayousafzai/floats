@@ -114,7 +114,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const pins: EventPin[] = (data ?? []).map((ev: any) => {
+    type MapEventRow = {
+      id: string;
+      title: string | null;
+      description: string | null;
+      starts_at: string | null;
+      ends_at: string | null;
+      image_url: string | null;
+      address: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      geom: unknown;
+      org: { name: string | null; slug: string | null } | null;
+    };
+    const pins: EventPin[] = (data as MapEventRow[] ?? []).map((ev) => {
       let latVal: number | null = ev.latitude ?? null;
       let lngVal: number | null = ev.longitude ?? null;
 
@@ -148,8 +161,8 @@ export async function GET(req: Request) {
     }).filter(Boolean);
 
     return NextResponse.json(pins);
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Map search failure:", e);
-    return NextResponse.json({ error: e.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Unknown error" }, { status: 500 });
   }
 }
