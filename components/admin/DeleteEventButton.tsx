@@ -24,8 +24,8 @@ export default function DeleteEventButton({ eventId }: Props) {
         }
         // Refresh the page to show the updated list
         router.refresh();
-      } catch (error: any) {
-        alert(`Error: ${error.message}`);
+      } catch (error: unknown) {
+        alert(`Error: ${error instanceof Error ? error.message : String(error)}`);
       } finally {
         setIsDeleting(false);
       }

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ code: "not_authenticated" }, { status: 401 });
 
-  let body: any;
+  let body: { event_id?: unknown; lat?: unknown; lng?: unknown; accuracy_m?: unknown; method?: unknown; source?: unknown; debug?: unknown };
   try { body = await req.json(); } catch { return NextResponse.json({ code: "bad_request" }, { status: 400 }); }
 
   const { event_id, lat, lng, accuracy_m, method = "web", source = "browser_geolocation", debug = false } = body ?? {};
@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
     const code = ["outside_time_window","bad_accuracy","outside_geofence","event_missing_location","event_not_found","invalid_coordinates","not_authenticated"]
       .find(c => msg.includes(c)) ?? "unknown_error";
 
-    let lastAttempt: any = null;
-    let eventRow: any = null;
+    let lastAttempt: Record<string, unknown> | null = null;
+    let eventRow: Record<string, unknown> | null = null;
     if (DEBUG || debug) {
       try {
         const { data: attempt } = await supabase
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     if (DEBUG || debug) {
       console.error("[check-in][debug] RPC error:", {
         code,
-        rpc_error: { message: error.message, details: (error as any).details, hint: (error as any).hint, code: (error as any).code },
+        rpc_error: { message: error.message, details: error.details, hint: error.hint, code: error.code },
         lastAttempt,
         eventRow,
       });

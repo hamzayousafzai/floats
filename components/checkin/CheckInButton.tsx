@@ -57,10 +57,10 @@ export default function CheckInButton({
   useEffect(() => {
     (async () => {
       try {
-        if ("permissions" in navigator && (navigator as any).permissions?.query) {
-          const result = await (navigator as any).permissions.query({ name: "geolocation" });
+        if ("permissions" in navigator && navigator.permissions) {
+          const result = await navigator.permissions.query({ name: "geolocation" });
           setPermState(result.state);
-          (result as any).onchange = () => setPermState((result as any).state);
+          result.onchange = function () { setPermState(result.state); };
         }
       } catch {
         // Permissions API not available
@@ -176,8 +176,8 @@ export default function CheckInButton({
           }
 
           const text = await res.clone().text();
-          let json: any = null;
-          try { json = JSON.parse(text); } catch {}
+          let json: { code?: string } | null = null;
+          try { json = JSON.parse(text) as { code?: string }; } catch {}
           if (debugClient) console.debug("[check-in][client] api response", { status: res.status, body: json ?? text });
 
           if (!res.ok) {
@@ -186,7 +186,7 @@ export default function CheckInButton({
             setStatus("success");
             setAlreadyChecked(true); // NEW: lock UI after success
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (debugClient) console.error("[check-in][client] error", e);
           setStatus("generic_error");
         } finally {

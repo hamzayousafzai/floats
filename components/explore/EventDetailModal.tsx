@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { ExploreCardData } from "@/lib/types";
-import { Calendar, MapPin, Download, Navigation, Share2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, MapPin, Download, Navigation, Share2, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import Image from "next/image";
 import FavoriteButton from "../FavoriteButton";
 import NotificationBell from "../NotificationBell";
@@ -442,6 +442,17 @@ export default function EventDetailModal({ event, onClose, onCardChange, isPrevi
                     Share
                   </button>
                 </div>
+                {event.event_url && (
+                  <a
+                    href={event.event_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    More Info
+                  </a>
+                )}
               </div>
 
               {/* About section */}

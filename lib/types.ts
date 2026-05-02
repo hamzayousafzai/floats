@@ -42,6 +42,7 @@ export type ExploreCardData = {
   is_series_followed?: boolean;
   series_id?: string | null;
   event_media?: { image_url: string; sort_index: number }[] | null;
+  event_url?: string | null;
   is_past?: boolean;             // UI hint
 };
 

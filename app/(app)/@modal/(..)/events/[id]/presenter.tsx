@@ -3,21 +3,10 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import EventDetailModal from "@/components/explore/EventDetailModal";
-
-type EventRow = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  starts_at: string | null;
-  ends_at: string | null;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  image_url: string | null;
-};
+import type { ExploreCardData } from "@/lib/types";
 
 type PresenterProps = {
-  event: EventRow | null;
+  event: ExploreCardData | null;
 };
 
 export default function ModalPresenter({ event }: PresenterProps) {
@@ -48,7 +37,7 @@ export default function ModalPresenter({ event }: PresenterProps) {
 
   return (
     <EventDetailModal
-      event={event as any}
+      event={event}
       onClose={close}
     />
   );

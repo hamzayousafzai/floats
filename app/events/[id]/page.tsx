@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import ShareButton from "@/components/ShareButton";
-import { Calendar, MapPin, Download, Navigation } from "lucide-react";
+import { Calendar, ExternalLink, MapPin, Download, Navigation } from "lucide-react";
 
 type Props = {
   params: {
@@ -164,6 +164,17 @@ export default async function EventDetailPage({ params }: Props) {
               }`}
               className="btn btn-outline btn-sm"
             />
+
+            {event.event_url && (
+              <a
+                href={event.event_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-outline btn-sm"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" /> More Info
+              </a>
+            )}
           </div>
         </aside>
       </div>

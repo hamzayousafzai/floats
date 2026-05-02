@@ -3,6 +3,9 @@ import { Star, Ticket, Bell } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import React from "react";
 import BadgesDetailModal from "@/components/profile/BadgesDetailModal";
+import type { Database } from "@/lib/database.types";
+
+type BadgeDbRow = Database["public"]["Views"]["v_user_badges"]["Row"];
 
 const ICONS = { star: Star, ticket: Ticket, bell: Bell } as const;
 type IconKey = keyof typeof ICONS;
@@ -59,7 +62,7 @@ function progressPercent(b: BadgeRowItem): number {
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
-export default function BadgeRow({ badges }: { badges: any[] }) {
+export default function BadgeRow({ badges }: { badges: BadgeDbRow[] }) {
   const [showModal, setShowModal] = useState(false);
   const [openSlug, setOpenSlug] = useState<BadgeRowItem["slug"] | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,9 +135,9 @@ export default function BadgeRow({ badges }: { badges: any[] }) {
             const pct = progressPercent(b);
 
             const radialStyle = {
-              ["--value" as any]: pct,
-              ["--size" as any]: "3.5rem",
-              ["--thickness" as any]: "4px",
+              "--value": pct,
+              "--size": "3.5rem",
+              "--thickness": "4px",
               color: tierColorHex(b.current_tier), // ring + icon color
             } as React.CSSProperties;
 

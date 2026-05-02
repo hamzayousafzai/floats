@@ -64,7 +64,7 @@ export default function InviteMemberModal({ isOpen, onClose, onInviteSent }: Pro
       <div className="modal-box">
         <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"><X size={20} /></button>
         <h3 className="font-bold text-lg">Invite New Member</h3>
-        <p className="py-2 text-sm text-gray-600">Invite a new member to join '{currentOrg.name}'.</p>
+        <p className="py-2 text-sm text-gray-600">Invite a new member to join &lsquo;{currentOrg.name}&rsquo;.</p>
         
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="form-control">

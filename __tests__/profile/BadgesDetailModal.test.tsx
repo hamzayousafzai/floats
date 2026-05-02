@@ -33,7 +33,7 @@ function makeBadge(
   progress: number,
   next_threshold: number | null,
 ) {
-  return { slug, icon_key, name: slug, current_tier, progress, next_threshold };
+  return { slug, icon_key, name: slug, current_tier, progress, next_threshold, badge_id: null, description: null, user_id: null };
 }
 
 const allLocked = [

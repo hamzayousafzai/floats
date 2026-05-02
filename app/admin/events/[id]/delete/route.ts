@@ -83,9 +83,9 @@ async function handler(
     }
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Delete event error:", e);
-    return NextResponse.json({ error: e?.message || "Failed to delete event" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to delete event" }, { status: 500 });
   }
 }
 

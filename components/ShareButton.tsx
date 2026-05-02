@@ -3,6 +3,9 @@
 import React, { useCallback } from "react";
 import { Share2 } from "lucide-react";
 
+type ShareData = { title?: string; text?: string; url: string };
+type NavigatorWithShare = Navigator & { share?: (data: ShareData) => Promise<void> };
+
 export default function ShareButton({
   title,
   text,
@@ -16,8 +19,9 @@ export default function ShareButton({
 }) {
   const handleShare = useCallback(async () => {
     try {
-      if ((navigator as any).share) {
-        await (navigator as any).share({ title, text, url });
+      const nav = navigator as NavigatorWithShare;
+      if (nav.share) {
+        await nav.share({ title, text, url });
         return;
       }
 

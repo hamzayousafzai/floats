@@ -4,15 +4,23 @@ import { Resend } from "resend";
 import TwoDayReminderEmail from "@/components/emails/TwoDayReminderEmail";
 import EventStartingEmail from "@/components/emails/EventStartingEmail";
 
-// Initialize Resend with your API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function GET(request: Request) {
   // 1. Secure the endpoint with a secret
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response('Unauthorized', { status: 401 });
   }
+
+  // 2. Guard env vars (prevents build/runtime crash when not configured)
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { ok: false, error: "RESEND_API_KEY is not configured" },
+      { status: 500 }
+    );
+  }
+
+  const resend = new Resend(apiKey);
 
   const supabaseAdmin = await createSupabaseAdmin();
 
@@ -53,12 +61,12 @@ export async function GET(request: Request) {
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', job.id);
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(`Cron Error: Failed to process job ${job.id}`, e);
       // 5. Mark job as 'failed' on error
       await supabaseAdmin
         .from('event_notification_queue')
-        .update({ status: 'failed', error_message: e.message })
+        .update({ status: 'failed', error_message: e instanceof Error ? e.message : String(e) })
         .eq('id', job.id);
     }
   });

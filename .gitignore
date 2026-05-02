@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 *.md
+
+# SQL dumps (generated locally, not for version control)
+supabase/migrations/*
+data/schema.sql
+data/seeds.sql
+

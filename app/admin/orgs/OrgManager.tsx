@@ -4,10 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { archiveOrgAction } from "./actions";
-import { ArrowLeft } from "lucide-react"; // Import the icon
+import { ArrowLeft } from "lucide-react";
+import type { Database } from "@/lib/database.types";
+
+type OrgRow = Database["public"]["Tables"]["orgs"]["Row"];
 
 // This is the client component that displays the table and handles interactions.
-export default function OrgManager({ orgs }: { orgs: any[] }) {
+export default function OrgManager({ orgs }: { orgs: OrgRow[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 

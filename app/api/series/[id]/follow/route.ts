@@ -49,9 +49,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     return NextResponse.json({ ok: true, following });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("series follow error:", err);
-    return NextResponse.json({ error: err?.message ?? "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
   }
 }
 
@@ -74,8 +74,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // If data exists and 'following' is true, then they are following.
     const following = data?.following ?? false;
     return NextResponse.json({ following });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("series follow GET error:", err);
-    return NextResponse.json({ error: err?.message ?? "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
   }
 }

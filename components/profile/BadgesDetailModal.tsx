@@ -2,6 +2,9 @@
 
 import { Star, Ticket, Bell, Lock } from "lucide-react";
 import React from "react";
+import type { Database } from "@/lib/database.types";
+
+type BadgeDbRow = Database["public"]["Views"]["v_user_badges"]["Row"];
 
 const ICONS = { star: Star, ticket: Ticket, bell: Bell } as const;
 type IconKey = keyof typeof ICONS;
@@ -62,7 +65,7 @@ function descriptionFor(slug: BadgeItem["slug"], tier: Tier, nextTier: string | 
 }
 
 type Props = {
-  badges: any[];
+  badges: BadgeDbRow[];
   onClose: () => void;
 };
 

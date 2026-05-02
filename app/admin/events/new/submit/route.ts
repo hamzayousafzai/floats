@@ -36,11 +36,12 @@ export async function POST(req: Request) {
     );
   }
 
+  type EventInput = { starts_at?: string; ends_at?: string; [key: string]: unknown };
   // Normalize event dates to UTC and pass through fields
-  const eventsNormalized = events.map((e: any) => ({
+  const eventsNormalized = (events as EventInput[]).map((e) => ({
     ...e,
-    starts_at: toUtcIso(e.starts_at),
-    ends_at: toUtcIso(e.ends_at),
+    starts_at: toUtcIso(e.starts_at ?? ""),
+    ends_at: toUtcIso(e.ends_at ?? ""),
   }));
 
   const p = {
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const event_ids = (data ?? []).map((r: any) => r.event_id);
+    const event_ids = (data ?? []).map((r: { event_id: string }) => r.event_id);
     const series_id = (data ?? [])[0]?.series_id ?? null;
 
     return NextResponse.json({
@@ -71,8 +72,8 @@ export async function POST(req: Request) {
       event_ids,
       count: event_ids.length,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("create events route error:", e);
-    return NextResponse.json({ error: e?.message ?? "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Internal error" }, { status: 500 });
   }
 }

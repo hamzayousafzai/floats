@@ -34,8 +34,8 @@ export default function LoginForm() {
       if (error) throw error;
       setSent(true);
       setStep("verify");
-    } catch (err: any) {
-      setError(err.message || "Failed to send code.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to send code.");
     }
   }
 
@@ -69,8 +69,8 @@ export default function LoginForm() {
       } else {
         setError("Invalid or expired code.");
       }
-    } catch (err: any) {
-      setError(err.message || "Could not verify code.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not verify code.");
     } finally {
       setVerifying(false);
     }
@@ -86,8 +86,8 @@ export default function LoginForm() {
         options: { shouldCreateUser: true },
       });
       if (error) throw error;
-    } catch (err: any) {
-      setError(err.message || "Failed to resend.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to resend.");
     } finally {
       setResending(false);
     }
