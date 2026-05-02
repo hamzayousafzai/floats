@@ -87,7 +87,8 @@ export async function POST(
     // 3. Call the general update RPC for all other fields using the admin client.
     const { error: updateError } = await supabaseAdmin.rpc('update_event_with_media', {
       p_event_id: eventId,
-      p_event_data: updatePayload,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      p_event_data: updatePayload as any,
       p_media_data: event_media || [],
       p_category_ids: category_ids || []
     });

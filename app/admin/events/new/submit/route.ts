@@ -40,8 +40,8 @@ export async function POST(req: Request) {
   // Normalize event dates to UTC and pass through fields
   const eventsNormalized = (events as EventInput[]).map((e) => ({
     ...e,
-    starts_at: toUtcIso(e.starts_at),
-    ends_at: toUtcIso(e.ends_at),
+    starts_at: toUtcIso(e.starts_at ?? ""),
+    ends_at: toUtcIso(e.ends_at ?? ""),
   }));
 
   const p = {

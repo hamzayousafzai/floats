@@ -16,7 +16,7 @@
  */
 import "@testing-library/jest-dom";
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import FeaturedEventCard from "@/components/explore/FeaturedEventCard";
 import type { ExploreCardData } from "@/lib/types";
 
@@ -25,17 +25,16 @@ import type { ExploreCardData } from "@/lib/types";
 jest.mock("next/image", () => ({
   __esModule: true,
   default: (props: React.ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean }) => {
-    const { fill, ...rest } = props;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { fill: _fill, ...rest } = props;
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
     return <img {...rest} />;
   },
 }));
 
 // Mock FavoriteButton to a simple toggle button we can control from tests
-const mockOnChange = jest.fn();
-jest.mock("@/components/FavoriteButton", () => ({
-  __esModule: true,
-  default: ({
+jest.mock("@/components/FavoriteButton", () => {
+  function FavoriteButtonMock({
     initialStarred,
     onChange,
     onInitialLoad,
@@ -43,8 +42,7 @@ jest.mock("@/components/FavoriteButton", () => ({
     initialStarred?: boolean;
     onChange?: (v: boolean) => void;
     onInitialLoad?: (v: boolean) => void;
-  }) => {
-    // Call onInitialLoad synchronously so tests can inspect starred state
+  }) {
     React.useEffect(() => {
       onInitialLoad?.(initialStarred ?? false);
     }, [initialStarred, onInitialLoad]);
@@ -58,8 +56,10 @@ jest.mock("@/components/FavoriteButton", () => ({
         {initialStarred ? "starred" : "unstarred"}
       </button>
     );
-  },
-}));
+  }
+
+  return { __esModule: true, default: FavoriteButtonMock };
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
