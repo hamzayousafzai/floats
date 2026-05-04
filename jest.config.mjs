@@ -14,6 +14,16 @@ const customConfig = {
     "!components/explore/**/*.d.ts",
     "components/profile/**/*.{ts,tsx}",
     "!components/profile/**/*.d.ts",
+    "components/auth/**/*.{ts,tsx}",
+    "!components/auth/**/*.d.ts",
+    "components/checkin/**/*.{ts,tsx}",
+    "!components/checkin/**/*.d.ts",
+    "components/FavoriteButton.tsx",
+    "app/actions/**/*.{ts,tsx}",
+    "app/api/**/*.{ts,tsx}",
+    "lib/geo.ts",
+    "lib/timezone.ts",
+    "middleware.ts",
   ],
 };
 
