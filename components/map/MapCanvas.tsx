@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import maplibregl, { type Map } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import Supercluster from "supercluster";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import type { EventPin } from "@/lib/types";
@@ -11,6 +12,9 @@ import MapFilterSheet from "./MapFilterSheet";
 import MapBottomSheet from "./MapBottomSheet";
 import { getEventTimeCategory } from "./PinPopup";
 import type { Area } from "@/components/filters/AreaFilters";
+import { Maximize2 } from "lucide-react";
+
+// ─── Marker element factories ────────────────────────────────────────────────
 
 const createMarkerElement = (starts_at?: string): HTMLElement => {
   const category = getEventTimeCategory(starts_at ? new Date(starts_at) : undefined);
@@ -31,19 +35,52 @@ const createMarkerElement = (starts_at?: string): HTMLElement => {
   return el;
 };
 
+/** Circle badge marker for clusters. Size scales slightly with count. */
+const createClusterElement = (count: number): HTMLElement => {
+  const size = count < 10 ? 40 : count < 50 ? 48 : 56;
+  const el = document.createElement("div");
+  el.innerHTML = `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg"
+      style="filter: drop-shadow(0 2px 6px rgba(0,0,0,0.28))">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="#6366f1" stroke="white" stroke-width="2.5"/>
+      <text
+        x="${size / 2}" y="${size / 2}"
+        text-anchor="middle" dominant-baseline="central"
+        font-family="system-ui, sans-serif"
+        font-size="${count < 10 ? 14 : 12}"
+        font-weight="700"
+        fill="white"
+      >${count}</text>
+    </svg>`;
+  el.style.cursor = "pointer";
+  return el;
+};
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type PinFeature = GeoJSON.Feature<GeoJSON.Point, EventPin>;
+
 type Props = {
   onPinClick: (event: EventPin) => void;
 };
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MapCanvas({ onPinClick }: Props) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
 
+  // Supercluster instance + raw pin store, both stable refs (never cause re-renders)
+  const clusterRef = useRef<Supercluster<EventPin>>(
+    new Supercluster<EventPin>({ radius: 40, maxZoom: 16 })
+  );
+  const allPinsRef = useRef<EventPin[]>([]);
+
   const [time, setTime] = useState<TimeFilter>("this-month");
   const [distance, setDistance] = useState<DistanceFilter>("5");
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [selectedPin, setSelectedPin] = useState<EventPin | null>(null);
+  const [selectedPins, setSelectedPins] = useState<EventPin[]>([]);
   const [pinCount, setPinCount] = useState(0);
   const [availableAreas, setAvailableAreas] = useState<Area[]>([]);
 
@@ -53,14 +90,75 @@ export default function MapCanvas({ onPinClick }: Props) {
   const searchParams = useSearchParams();
 
   const selectedAreas = new Set(searchParams.get("areas")?.split(",").filter(Boolean) ?? []);
+  const hasActiveFilters = distance !== "5" || selectedAreas.size > 0;
 
-  const hasActiveFilters =
-    distance !== "5" || selectedAreas.size > 0;
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const clearMarkers = () => {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
   };
+
+  /**
+   * Reads current map viewport, calls supercluster.getClusters(), and renders
+   * cluster + single-pin markers. Called after every fetch and on zoom changes.
+   */
+  const renderClusters = useCallback((currentMap: Map) => {
+    clearMarkers();
+
+    const bounds = currentMap.getBounds();
+    const zoom = Math.round(currentMap.getZoom());
+
+    const clusters = clusterRef.current.getClusters(
+      [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+      zoom
+    );
+
+    clusters.forEach((feature) => {
+      const [lng, lat] = feature.geometry.coordinates;
+      // Narrow cluster vs. point via a local cast — supercluster's union type
+      // doesn't expose `cluster` on non-cluster side, so we discriminate manually.
+      const clusterProps = feature.properties as {
+        cluster?: true;
+        cluster_id?: number;
+        point_count?: number;
+      };
+
+      if (clusterProps.cluster) {
+        // ── Cluster marker ──────────────────────────────────────────────────
+        const count = clusterProps.point_count ?? 0;
+        const clusterId = clusterProps.cluster_id!;
+        const clusterEl = createClusterElement(count);
+
+        clusterEl.addEventListener("click", () => {
+          // Gather all leaf EventPins for this cluster
+          const leaves = clusterRef.current.getLeaves(
+            clusterId,
+            Infinity
+          ) as PinFeature[];
+          const pins = leaves.map((l) => l.properties);
+          setSelectedPins(pins);
+        });
+
+        const marker = new maplibregl.Marker({ element: clusterEl, anchor: "center" })
+          .setLngLat([lng, lat])
+          .addTo(currentMap);
+        markersRef.current.push(marker);
+      } else {
+        // ── Single-pin marker ───────────────────────────────────────────────
+        const pin = feature.properties as unknown as EventPin;
+        const markerEl = createMarkerElement(pin.starts_at ?? undefined);
+        markerEl.addEventListener("click", () => setSelectedPins([pin]));
+
+        const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
+          .setLngLat([lng, lat])
+          .addTo(currentMap);
+        markersRef.current.push(marker);
+      }
+    });
+  }, []);
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   const fetchAndPlacePins = useCallback(
     async (currentMap: Map) => {
@@ -76,9 +174,7 @@ export default function MapCanvas({ onPinClick }: Props) {
         when: time,
       });
       const areas = searchParams.get("areas");
-      if (areas) {
-        params.set("area_slugs", areas);
-      }
+      if (areas) params.set("area_slugs", areas);
 
       const myReqId = ++reqIdRef.current;
 
@@ -94,25 +190,27 @@ export default function MapCanvas({ onPinClick }: Props) {
         const data = (await res.json()) as EventPin[];
         if (myReqId !== reqIdRef.current) return;
 
-        clearMarkers();
+        allPinsRef.current = data;
         setPinCount(data.length);
 
-        data.forEach((p) => {
-          const markerEl = createMarkerElement(p.starts_at ?? undefined);
-          markerEl.addEventListener("click", () => setSelectedPin(p));
+        // Load all pins into supercluster as GeoJSON point features
+        const features: PinFeature[] = data.map((p) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+          properties: p,
+        }));
+        clusterRef.current.load(features);
 
-          const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
-            .setLngLat([p.lng, p.lat])
-            .addTo(currentMap);
-          markersRef.current.push(marker);
-        });
+        renderClusters(currentMap);
       } catch (e: unknown) {
         if (e instanceof Error && e.name === "AbortError") return;
         console.error("Failed to fetch map pins:", e);
       }
     },
-    [time, distance, searchParams]
+    [time, distance, searchParams, renderClusters]
   );
+
+  // ── Effects ────────────────────────────────────────────────────────────────
 
   // Effect 1: Initialize the map ONCE
   useEffect(() => {
@@ -141,14 +239,21 @@ export default function MapCanvas({ onPinClick }: Props) {
     if (!map) return;
 
     const handleMoveEnd = () => fetchAndPlacePins(map);
+    // Re-render clusters on zoom without re-fetching data
+    const handleZoom = () => {
+      if (allPinsRef.current.length > 0) renderClusters(map);
+    };
+
     map.on("load", handleMoveEnd);
     map.on("moveend", handleMoveEnd);
+    map.on("zoom", handleZoom);
 
     return () => {
       map.off("load", handleMoveEnd);
       map.off("moveend", handleMoveEnd);
+      map.off("zoom", handleZoom);
     };
-  }, [fetchAndPlacePins]);
+  }, [fetchAndPlacePins, renderClusters]);
 
   // Effect 3: Zoom on distance change
   useEffect(() => {
@@ -187,6 +292,40 @@ export default function MapCanvas({ onPinClick }: Props) {
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
+  const fitAllPins = () => {
+    const map = mapRef.current;
+    const pins = allPinsRef.current;
+    if (!map || pins.length === 0) return;
+
+    let minLng = pins[0].lng;
+    let maxLng = pins[0].lng;
+    let minLat = pins[0].lat;
+    let maxLat = pins[0].lat;
+
+    for (const p of pins) {
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+    }
+
+    map.fitBounds(
+      [[minLng, minLat], [maxLng, maxLat]],
+      {
+        padding: {
+          top: 80,    // clears the filter bar
+          bottom: 160, // clears bottom nav (~72px) + badge button (~112px from bottom)
+          left: 60,
+          right: 60,
+        },
+        maxZoom: 14,
+        duration: 800,
+      }
+    );
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="w-full h-full relative">
       {/* Map tile */}
@@ -204,10 +343,14 @@ export default function MapCanvas({ onPinClick }: Props) {
 
       {/* Event count badge — above bottom nav */}
       {pinCount > 0 && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="bg-base-100/90 backdrop-blur-sm border border-base-200 rounded-full px-4 py-1.5 shadow-md text-xs font-medium text-base-content/70 whitespace-nowrap">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10">
+          <button
+            onClick={fitAllPins}
+            className="flex items-center gap-1.5 bg-base-100/90 backdrop-blur-sm border border-base-200 rounded-full px-4 py-1.5 shadow-md text-xs font-medium text-base-content/70 whitespace-nowrap cursor-pointer hover:bg-base-200/90 hover:text-base-content active:scale-95 transition-all"
+          >
+            <Maximize2 size={12} />
             {pinCount} event{pinCount !== 1 ? "s" : ""} in search area
-          </div>
+          </button>
         </div>
       )}
 
@@ -224,13 +367,11 @@ export default function MapCanvas({ onPinClick }: Props) {
 
       {/* Bottom sheet event preview */}
       <MapBottomSheet
-        pin={selectedPin}
-        onClose={() => setSelectedPin(null)}
-        onViewEvent={() => {
-          if (selectedPin) {
-            onPinClick(selectedPin);
-            setSelectedPin(null);
-          }
+        pins={selectedPins}
+        onClose={() => setSelectedPins([])}
+        onViewEvent={(pin) => {
+          onPinClick(pin);
+          setSelectedPins([]);
         }}
       />
     </div>
