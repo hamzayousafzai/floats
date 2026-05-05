@@ -12,6 +12,7 @@ import MapFilterSheet from "./MapFilterSheet";
 import MapBottomSheet from "./MapBottomSheet";
 import { getEventTimeCategory } from "./PinPopup";
 import type { Area } from "@/components/filters/AreaFilters";
+import { Maximize2 } from "lucide-react";
 
 // ─── Marker element factories ────────────────────────────────────────────────
 
@@ -291,6 +292,38 @@ export default function MapCanvas({ onPinClick }: Props) {
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
+  const fitAllPins = () => {
+    const map = mapRef.current;
+    const pins = allPinsRef.current;
+    if (!map || pins.length === 0) return;
+
+    let minLng = pins[0].lng;
+    let maxLng = pins[0].lng;
+    let minLat = pins[0].lat;
+    let maxLat = pins[0].lat;
+
+    for (const p of pins) {
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+    }
+
+    map.fitBounds(
+      [[minLng, minLat], [maxLng, maxLat]],
+      {
+        padding: {
+          top: 80,    // clears the filter bar
+          bottom: 160, // clears bottom nav (~72px) + badge button (~112px from bottom)
+          left: 60,
+          right: 60,
+        },
+        maxZoom: 14,
+        duration: 800,
+      }
+    );
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -310,10 +343,14 @@ export default function MapCanvas({ onPinClick }: Props) {
 
       {/* Event count badge — above bottom nav */}
       {pinCount > 0 && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-          <div className="bg-base-100/90 backdrop-blur-sm border border-base-200 rounded-full px-4 py-1.5 shadow-md text-xs font-medium text-base-content/70 whitespace-nowrap">
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10">
+          <button
+            onClick={fitAllPins}
+            className="flex items-center gap-1.5 bg-base-100/90 backdrop-blur-sm border border-base-200 rounded-full px-4 py-1.5 shadow-md text-xs font-medium text-base-content/70 whitespace-nowrap cursor-pointer hover:bg-base-200/90 hover:text-base-content active:scale-95 transition-all"
+          >
+            <Maximize2 size={12} />
             {pinCount} event{pinCount !== 1 ? "s" : ""} in search area
-          </div>
+          </button>
         </div>
       )}
 
