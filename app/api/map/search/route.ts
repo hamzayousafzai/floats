@@ -1,6 +1,44 @@
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EventPin } from "@/lib/types";
+
+type OrgRef = { name: string | null; slug: string | null };
+const PROVENANCE_CHUNK = 100;
+
+// PostgREST returns a single embedded object for a to-one relation and an array for to-many; accept both.
+function firstOrg(org: OrgRef | OrgRef[] | null | undefined): OrgRef | null {
+  return (Array.isArray(org) ? org[0] : org) ?? null;
+}
+
+/**
+ * Organizer names for imported events live in the private provenance table, which anon/authenticated roles cannot
+ * read. Fetch only the display name for the already-selected published event ids using the server-side service role.
+ * Failure never breaks the map: pins simply keep an empty vendorName.
+ */
+async function fetchOrganizerFallbacks(eventIds: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (eventIds.length === 0) return names;
+  try {
+    // event_ingestion_links is not in the generated Database types (private provenance table), so use an untyped view.
+    const admin = createSupabaseAdmin() as unknown as SupabaseClient;
+    for (let i = 0; i < eventIds.length; i += PROVENANCE_CHUNK) {
+      const { data, error } = await admin
+        .from("event_ingestion_links")
+        .select("event_id, organizer_display_name")
+        .in("event_id", eventIds.slice(i, i + PROVENANCE_CHUNK));
+      if (error) throw error;
+      for (const row of (data ?? []) as { event_id: string; organizer_display_name: string | null }[]) {
+        const name = typeof row.organizer_display_name === "string" ? row.organizer_display_name.trim() : "";
+        if (name) names.set(row.event_id, name);
+      }
+    }
+  } catch (e) {
+    console.error("Organizer fallback lookup failed:", e instanceof Error ? e.message : "unknown error");
+  }
+  return names;
+}
 
 // miles → meters
 const MI = 1609.344;
@@ -125,7 +163,7 @@ export async function GET(req: Request) {
       latitude: number | null;
       longitude: number | null;
       geom: unknown;
-      org: { name: string | null; slug: string | null }[] | null;
+      org: OrgRef | OrgRef[] | null;
     };
     const pins: EventPin[] = ((data ?? []) as unknown as MapEventRow[]).map((ev) => {
       let latVal: number | null = ev.latitude ?? null;
@@ -147,8 +185,8 @@ export async function GET(req: Request) {
 
       return {
         id: ev.id,
-        vendorSlug: ev.org?.[0]?.slug ?? "",
-        vendorName: ev.org?.[0]?.name ?? "",
+        vendorSlug: firstOrg(ev.org)?.slug ?? "",
+        vendorName: firstOrg(ev.org)?.name ?? "",
         title: ev.title ?? null,
         description: ev.description ?? null,
         starts_at: ev.starts_at ?? "",
@@ -159,6 +197,14 @@ export async function GET(req: Request) {
         imageUrl: ev.image_url ?? null,
       };
     }).filter(Boolean);
+
+    const unnamed = pins.filter((p) => !p.vendorName).map((p) => p.id);
+    if (unnamed.length > 0) {
+      const fallbacks = await fetchOrganizerFallbacks(unnamed);
+      for (const pin of pins) {
+        if (!pin.vendorName) pin.vendorName = fallbacks.get(pin.id) ?? "";
+      }
+    }
 
     return NextResponse.json(pins);
   } catch (e: unknown) {

@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- SYNTHETIC FIXTURE: invented data for parser tests. Not captured from a real organizer. -->
+<html>
+  <head>
+    <title>Example Makers Market</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Event",
+        "@id": "evt-1001",
+        "name": "  Example Winter   Makers Market ",
+        "description": "Shop 45 local vendors selling handmade goods, art and food.",
+        "startDate": "2031-12-06T10:00:00-05:00",
+        "endDate": "2031-12-06T16:00:00-05:00",
+        "url": "/events/winter-makers-market",
+        "eventStatus": "https://schema.org/EventScheduled",
+        "organizer": { "@type": "Organization", "name": "Example Makers Collective" },
+        "location": {
+          "@type": "Place",
+          "name": "Example Pavilion",
+          "address": { "@type": "PostalAddress", "streetAddress": "100 Example St", "addressLocality": "Charlotte", "addressRegion": "NC", "postalCode": "28202" }
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "Organization", "name": "Example Makers Collective" },
+          {
+            "@type": ["Event", "SaleEvent"],
+            "name": "Example Spring Market",
+            "startDate": "2032-03-13T10:00:00-05:00",
+            "eventStatus": "https://schema.org/EventCancelled",
+            "location": "Example Pavilion, 100 Example St, Charlotte, NC"
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">{ this is not valid json </script>
+  </head>
+  <body><h1>Events</h1></body>
+</html>

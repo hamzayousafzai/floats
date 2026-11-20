@@ -38,6 +38,18 @@ export default function AdminHome() {
           </Link>
         </div>
       </div>
+
+      <div className="border rounded-lg p-4">
+        <h3 className="font-medium">Event Ingestion</h3>
+        <p className="text-sm text-gray-500 mt-1">
+          Review automatically collected event candidates, sources and runs.
+        </p>
+        <div className="mt-4">
+          <Link href="/admin/ingestion" className="rounded bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200">
+            Open Ingestion
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

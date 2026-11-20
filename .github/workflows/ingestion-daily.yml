@@ -1,0 +1,32 @@
+name: Floats Daily Event Ingestion
+on:
+  schedule:
+    - cron: '15 9 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: floats-ingestion-daily
+  cancel-in-progress: false
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      INGESTION_PUBLISH_MODE: shadow
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Collect
+        run: npm run ingest:daily

@@ -1,0 +1,54 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//SYNTHETIC FIXTURE//Floats ingestion tests//EN
+X-WR-CALNAME:Synthetic Market Calendar
+BEGIN:VEVENT
+UID:synthetic-1@example.test
+SUMMARY:Example Holiday Market\, Charlotte
+DESCRIPTION:Browse 60 local vendors\nHandmade gifts\, food and art.
+DTSTART;TZID=America/New_York:20311213T100000
+DTEND;TZID=America/New_York:20311213T160000
+LOCATION:Example Pavilion\, 100 Example St\, Charlotte\, NC 28202
+ORGANIZER;CN="Example Collective":mailto:hello@example.test
+URL:https://www.example.test/holiday-market
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:synthetic-2@example.test
+SUMMARY:UTC Pop-up Market
+DTSTART:20320110T150000Z
+DTEND:20320110T200000Z
+LOCATION:200 Example Ave\, Charlotte\, NC
+END:VEVENT
+BEGIN:VEVENT
+UID:synthetic-3@example.test
+SUMMARY:Folded line example with a very long title that continues
+  on the next physical line
+DTSTART;TZID=America/Chicago:20320214T090000
+LOCATION:300 Example Blvd\, Charlotte\, NC
+END:VEVENT
+BEGIN:VEVENT
+UID:synthetic-4@example.test
+SUMMARY:All Day Fair
+DTSTART;VALUE=DATE:20320320
+LOCATION:400 Example Rd\, Charlotte\, NC
+END:VEVENT
+BEGIN:VEVENT
+UID:synthetic-5@example.test
+SUMMARY:Cancelled Market
+DTSTART;TZID=America/New_York:20320405T100000
+DTEND;TZID=America/New_York:20320405T150000
+STATUS:CANCELLED
+LOCATION:500 Example Way\, Charlotte\, NC
+END:VEVENT
+BEGIN:VEVENT
+UID:synthetic-6@example.test
+SUMMARY:Weekly Market With Explicit Dates
+DTSTART;TZID=America/New_York:20320501T090000
+DTEND;TZID=America/New_York:20320501T130000
+RDATE;TZID=America/New_York:20320508T090000,20320515T090000
+EXDATE;TZID=America/New_York:20320515T090000
+RRULE:FREQ=WEEKLY;COUNT=10
+LOCATION:600 Example Ln\, Charlotte\, NC
+END:VEVENT
+END:VCALENDAR

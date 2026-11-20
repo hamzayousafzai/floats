@@ -1,0 +1,9 @@
+[
+  { "name": "valid-market", "externalEventId": "e2e-valid", "overrides": {}, "geo": "charlotte", "expect": { "status": "ready", "isMarket": true } },
+  { "name": "valid-market-no-geocode", "externalEventId": "e2e-nogeo", "overrides": { "sourceUrl": "https://a.example.test/events/nogeo", "title": "Neighborhood Craft Bazaar", "address": "300 Example St, Charlotte, NC 28202" }, "geo": "none", "expect": { "status": "needs_review" } },
+  { "name": "outside-service-area", "externalEventId": "e2e-far", "overrides": { "sourceUrl": "https://a.example.test/events/far", "title": "Faraway Makers Market", "address": "1 Sunset Blvd, Los Angeles, CA 90001" }, "geo": "far", "expect": { "status": "rejected" } },
+  { "name": "already-past", "externalEventId": "e2e-past", "overrides": { "sourceUrl": "https://a.example.test/events/past", "title": "Autumn Makers Market", "startsAt": "2031-11-01T10:00:00", "endsAt": "2031-11-01T16:00:00" }, "geo": "charlotte", "expect": { "status": "rejected" } },
+  { "name": "not-a-market", "externalEventId": "e2e-mixer", "overrides": { "sourceUrl": "https://a.example.test/events/mixer", "title": "Corporate Networking Mixer", "description": "Quarterly mixer for local accountants.", "vendorCount": null, "evidence": [], "address": "400 Example St, Charlotte, NC 28202" }, "geo": "charlotte", "expect": { "status": "rejected" } },
+  { "name": "explicitly-cancelled", "externalEventId": "e2e-cancelled", "overrides": { "sourceUrl": "https://a.example.test/events/cancelled", "title": "Cancelled Spring Makers Market", "cancelled": true, "description": "This market has been cancelled.", "address": "500 Example St, Charlotte, NC 28202" }, "geo": "charlotte", "expect": { "status": "rejected" } },
+  { "name": "missing-title", "externalEventId": "e2e-notitle", "overrides": { "sourceUrl": "https://a.example.test/events/notitle", "title": null }, "geo": "charlotte", "expect": { "status": "invalid" } }
+]

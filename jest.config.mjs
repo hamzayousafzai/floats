@@ -8,7 +8,10 @@ const customConfig = {
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
-  testMatch: ["**/__tests__/**/*.test.{ts,tsx,js,jsx}"],
+  testMatch: [
+    "**/__tests__/**/*.test.{ts,tsx,js,jsx}",
+    "<rootDir>/tests/**/*.test.{ts,tsx}",
+  ],
   collectCoverageFrom: [
     "components/explore/**/*.{ts,tsx}",
     "!components/explore/**/*.d.ts",
