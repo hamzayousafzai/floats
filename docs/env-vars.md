@@ -1,0 +1,83 @@
+# Environment Variables
+
+Create a `.env.local` file in the `floats/` directory. This file is gitignored and must be set up manually.
+
+> There is no `.env.example` in the repository. This document is the authoritative reference.
+
+---
+
+## Required — Always
+
+These must be set to run the app at all.
+
+| Variable | Where to find it | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Project Settings → API | Public, safe to expose to browser |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API | Public anon key; RLS enforced |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API | **Secret.** Never expose to client. Used by admin client, upload, and invite endpoints |
+
+---
+
+## Required — For Email Notifications
+
+These are needed for the cron job and invite emails to work.
+
+| Variable | Where to find it | Notes |
+|---|---|---|
+| `RESEND_API_KEY` | Resend dashboard → API Keys | Used by `POST /api/cron/process-notifications` to send emails |
+| `CRON_SECRET` | Set yourself — any secure random string | Must match the `Authorization: Bearer <CRON_SECRET>` header sent by Vercel Cron |
+
+Without `RESEND_API_KEY`, the cron endpoint returns a `500` (guarded by an env check).  
+Without `CRON_SECRET`, the cron endpoint returns `401 Unauthorized` for any caller.
+
+---
+
+## Optional / Dev-Only
+
+| Variable | Default | Notes |
+|---|---|---|
+| `CHECKIN_DEBUG` | `"false"` | Set to `"true"` to enable verbose check-in logging in `POST /api/check-in` |
+| `NODE_ENV` | Set by Next.js | `development` enables the `DEBUG` flag in `middleware.ts` |
+
+---
+
+## Vercel Environment
+
+In production (Vercel), set all variables in the Vercel project dashboard under **Settings → Environment Variables**.
+
+The CI workflow stubs two variables to allow the build to succeed without hitting Supabase:
+
+```yaml
+NEXT_PUBLIC_SUPABASE_URL: http://localhost
+NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+```
+
+`SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and `CRON_SECRET` are not needed at build time.
+
+---
+
+## Example `.env.local`
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://inxlsvowzpqvfulhbnou.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# Email
+RESEND_API_KEY=re_...
+
+# Cron security
+CRON_SECRET=some-long-random-secret
+
+# Optional
+CHECKIN_DEBUG=false
+```
+
+---
+
+## Security Notes
+
+- `SUPABASE_SERVICE_ROLE_KEY` bypasses all RLS. Never import `lib/supabase/admin.ts` in a client component.
+- `CRON_SECRET` is the only protection for the notification cron endpoint. Rotate it if exposed.
+- `NEXT_PUBLIC_*` variables are bundled into the client JS bundle. Do not put secrets in them.

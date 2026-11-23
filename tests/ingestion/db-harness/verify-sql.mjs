@@ -1,6 +1,6 @@
 // Executes the migration and the publisher scenarios on the substitute PostgreSQL (see harness.mjs).
 import { createHash, randomUUID } from "node:crypto";
-import { startServer, connect, makePool, bootstrapDatabase, readMigration, readUpdatesMigration } from "./harness.mjs";
+import { startServer, connect, makePool, bootstrapDatabase, readMigration, readUpdatesMigration, readDeletionPolicyMigration } from "./harness.mjs";
 
 const results = [];
 let currentVariant = "";
@@ -82,6 +82,7 @@ async function run(port, variant) {
   // --- TASK-04: migration, structure, grants -------------------------------------------------
   await c.query(readMigration());
   await c.query(readUpdatesMigration());
+  await c.query(readDeletionPolicyMigration());
   const tables = (await c.query(`select table_name from information_schema.tables where table_schema='ingestion' order by 1`)).rows.map((r) => r.table_name);
   check("eight ingestion tables", JSON.stringify(tables) === JSON.stringify(["candidate_sources", "candidates", "observations", "publication_audit", "reviews", "runs", "source_discoveries", "sources"]), tables.join(","));
   check("public.event_ingestion_links exists", (await count(c, "information_schema.tables", "table_schema='public' and table_name='event_ingestion_links'")) === 1);
@@ -278,8 +279,53 @@ async function run(port, variant) {
   await verifyImportedUpdates(c, src, port, dbName);
   await verifyReviews(c, src, port, dbName);
   await verifyRunLock(c);
+  await verifyEventDeletion(c, src, adminUser);
 
   await c.end();
+}
+
+async function verifyEventDeletion(c, src, adminUser) {
+  const trg = (await c.query(`select has_function_privilege('anon', f, 'execute') a, has_function_privilege('authenticated', f, 'execute') u, has_function_privilege('public', f, 'execute') p
+     from (select 'ingestion.record_event_removal()'::regprocedure f) q`)).rows[0];
+  check("event-removal trigger function is not executable by clients", !trg.a && !trg.u && !trg.p, JSON.stringify(trg));
+
+  const cand = await mkCandidate(c, src, { title: "Deletion Policy Makers Market", address: "1 Deletion Policy Way, Charlotte, NC 28202", start_offset: "57 days" });
+  const eventId = (await publish(c, cand)).rows[0].publish_candidate;
+  const runId = (await c.query("insert into ingestion.runs (run_type, status) values ('replay', 'succeeded') returning id")).rows[0].id;
+  const obs = (await c.query(`insert into ingestion.observations (source_id, run_id, source_url, raw_payload, content_hash, parser_version)
+     values ($1, $2, 'https://example.org/e/del', '{}'::jsonb, $3, '1') returning id`, [src, runId, "d".repeat(64)])).rows[0].id;
+  await c.query("insert into ingestion.candidate_sources (candidate_id, observation_id, match_reason) values ($1, $2, 'test')", [cand, obs]);
+  await c.query("insert into ingestion.reviews (candidate_id, reviewer_id, decision, reason) values ($1, $2, 'request_review', 'evidence row')", [cand, adminUser]);
+
+  const delErr = await rejects(c.query("delete from public.events where id = $1", [eventId]));
+  check("deleting an imported event is no longer blocked by ingestion foreign keys", delErr === null, String(delErr));
+  check("event and provenance link are gone", (await count(c, "public.events", `id='${eventId}'`)) === 0 && (await count(c, "public.event_ingestion_links", `event_id='${eventId}'`)) === 0);
+  check("candidate, observation, review and evidence link survive", (await count(c, "ingestion.candidates", `id='${cand}'`)) === 1 && (await count(c, "ingestion.observations", `id='${obs}'`)) === 1 && (await count(c, "ingestion.reviews", `candidate_id='${cand}'`)) === 1 && (await count(c, "ingestion.candidate_sources", `candidate_id='${cand}'`)) === 1);
+  check("candidate stays published with a null event pointer", (await count(c, "ingestion.candidates", `id='${cand}' and status='published' and published_event_id is null`)) === 1);
+  check("publication audit is retained with a null event id", (await count(c, "ingestion.publication_audit", `candidate_id='${cand}' and action='published' and event_id is null`)) === 1);
+  check("an event_deleted audit row records the former event id", (await count(c, "ingestion.publication_audit", `candidate_id='${cand}' and action='event_deleted' and details->>'former_event_id'='${eventId}'`)) === 1);
+  check("automatic republication of a deleted event is refused", /Automatic publication not permitted/.test(String(await rejects(publish(c, cand)))));
+  check("manual republication of a deleted event is refused", /requires recorded admin approval/.test(String(await rejects(publish(c, cand, true)))));
+  check("no event was recreated", (await count(c, "public.events", "title='Deletion Policy Makers Market'")) === 0);
+
+  // archive, and unrelated pointer changes, must not produce deletion audits
+  const arch = await mkCandidate(c, src, { title: "Deletion Policy Archive Market", address: "2 Deletion Policy Way, Charlotte, NC 28202", start_offset: "58 days" });
+  const archEvent = (await publish(c, arch)).rows[0].publish_candidate;
+  await c.query("update public.events set status='archived' where id=$1", [archEvent]);
+  check("archiving an event keeps the candidate pointer and writes no deletion audit", (await count(c, "ingestion.candidates", `id='${arch}' and published_event_id='${archEvent}'`)) === 1 && (await count(c, "ingestion.publication_audit", `candidate_id='${arch}' and action='event_deleted'`)) === 0);
+
+  // deletion as service_role and a manually created event with no provenance
+  const svc = await mkCandidate(c, src, { title: "Deletion Policy Service Market", address: "3 Deletion Policy Way, Charlotte, NC 28202", start_offset: "59 days" });
+  const svcEvent = (await publish(c, svc)).rows[0].publish_candidate;
+  await c.query("begin");
+  await c.query("set local role service_role");
+  const svcErr = await rejects(c.query("delete from public.events where id = $1", [svcEvent]));
+  await c.query("rollback");
+  check("service_role can delete an imported event (foreign key actions run as owner)", svcErr === null, String(svcErr));
+  const hand = (await c.query("insert into public.events (title, starts_at, ends_at, status) values ('Hand Made Deletion Event', now() + interval '60 days', now() + interval '60 days 3 hours', 'published') returning id")).rows[0].id;
+  const auditsBefore = await count(c, "ingestion.publication_audit");
+  await c.query("delete from public.events where id = $1", [hand]);
+  check("deleting a manual event touches no ingestion rows", (await count(c, "ingestion.publication_audit")) === auditsBefore);
 }
 
 async function verifyRunLock(c) {

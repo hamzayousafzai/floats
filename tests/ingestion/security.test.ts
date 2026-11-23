@@ -123,6 +123,47 @@ describe("scheduled workflows", () => {
     expect([...new Set(secrets)]).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
     expect(text).not.toMatch(/pull_request|echo\s+.*secrets|set -x/);
   });
+
+  it.each(files)("%s pins every third-party action to a full commit SHA and installs no browser", (file) => {
+    const text = read(file);
+    const uses = [...text.matchAll(/^\s*uses:\s*(\S+)/gm)].map((m) => m[1]);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const ref of uses) expect(`${ref}: ${/@[0-9a-f]{40}$/.test(ref)}`).toBe(`${ref}: true`);
+    expect(text).not.toMatch(/playwright\s+install/);
+  });
+
+  it("the daily workflow runs verification after collection, even when collection fails", () => {
+    const text = read(".github/workflows/ingestion-daily.yml").replace(/\r\n/g, "\n");
+    const collect = text.indexOf("npm run ingest:daily");
+    const verify = text.indexOf("npm run ingest:verify");
+    expect(collect).toBeGreaterThan(0);
+    expect(verify).toBeGreaterThan(collect);
+    expect(text).toMatch(/if: \$\{\{ !cancelled\(\) \}\}\n\s+run: npm run ingest:verify/);
+    expect(text).not.toMatch(/continue-on-error/);
+  });
+});
+
+describe("browser rendering is disabled until network containment exists", () => {
+  it.each(["scripts/ingestion/collect.ts", "scripts/ingestion/verify.ts", "scripts/ingestion/discover.ts", "scripts/ingestion/replay.ts"])("%s never enables the Playwright adapter", (file) => {
+    expect(read(file)).not.toMatch(/navigationTimeoutMs|createPlaywrightAdapter|from "playwright"/);
+  });
+
+  it("only the adapter module itself imports playwright", () => {
+    const importers = walk("lib", (f) => /\.ts$/.test(f)).filter((f) => /import\("playwright"\)|from "playwright"/.test(read(f)));
+    expect(importers).toEqual(["lib/ingestion/adapters/playwright.ts"]);
+  });
+});
+
+describe("migration 20261121000100: event deletion policy", () => {
+  const sql = read("supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql");
+  it("detaches events without deleting evidence and keeps the trigger function private", () => {
+    expect(sql).toMatch(/foreign key \(published_event_id\) references public\.events\(id\) on delete set null/);
+    expect(sql).toMatch(/foreign key \(event_id\) references public\.events\(id\) on delete set null/);
+    expect(sql).not.toMatch(/on delete cascade/i);
+    expect(sql).toMatch(/security definer set search_path = ''/);
+    expect(sql).toMatch(/revoke all on function ingestion\.record_event_removal\(\) from public, anon, authenticated/);
+    expect(sql).not.toMatch(/\bgrant\b/i);
+  });
 });
 
 describe("migrations: privileges, RLS and definer functions", () => {

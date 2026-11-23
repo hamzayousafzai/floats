@@ -1,4 +1,6 @@
 name: Floats Daily Event Ingestion
+# Scheduled workflows only run from the repository default branch; this file does nothing until it is merged there.
+# 09:15 UTC is 05:15 EDT in summer and 04:15 EST in winter (GitHub cron is UTC-only; it is not DST aware).
 on:
   schedule:
     - cron: '15 9 * * *'
@@ -12,21 +14,25 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Secrets must come from an ISOLATED (staging) project until the launch checklist is signed off.
     env:
       INGESTION_PUBLISH_MODE: shadow
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
       - name: Install
         run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      # Chromium is deliberately NOT installed: browser rendering is disabled until network containment exists.
       - name: Collect
         run: npm run ingest:daily
+      # Runs even when collection fails so failing sources and missed runs are still reported; a nonzero exit fails the job.
+      - name: Verify
+        if: ${{ !cancelled() }}
+        run: npm run ingest:verify

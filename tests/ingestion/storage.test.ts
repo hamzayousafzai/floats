@@ -149,6 +149,15 @@ describe("sources", () => {
     expect((await getSourceById(client, source.id))?.successful_runs).toBe(1);
     await expect(updateSourceMetrics(client, randomUUID(), { success: true })).rejects.toThrow("Source not found");
   });
+
+  it("does not lose increments when attempts for the same source overlap", async () => {
+    const { client } = setup();
+    const { source } = await upsertSource(client, base);
+    await Promise.all([1, 2, 3].map(() => updateSourceMetrics(client, source.id, { success: true, validEvents: 1 })));
+    const after = await getSourceById(client, source.id);
+    expect(after?.successful_runs).toBe(3);
+    expect(after?.valid_events).toBe(3);
+  });
 });
 
 describe("runs", () => {

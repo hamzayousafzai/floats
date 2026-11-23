@@ -1,4 +1,6 @@
 name: Floats Weekly Source Discovery
+# Scheduled workflows only run from the repository default branch; this file does nothing until it is merged there.
+# 10:15 UTC on Sundays is 06:15 EDT / 05:15 EST (GitHub cron is UTC-only).
 on:
   schedule:
     - cron: '15 10 * * 0'
@@ -12,15 +14,16 @@ jobs:
   discover:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Secrets must come from an ISOLATED (staging) project until the launch checklist is signed off.
     env:
       INGESTION_PUBLISH_MODE: shadow
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm

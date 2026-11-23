@@ -300,6 +300,11 @@ describe("playwright adapter", () => {
     expect(await fake.request("http://169.254.169.254/latest", "fetch")).toBe("aborted");
     expect(await fake.request("https://rebind.example.test/x", "script")).toBe("aborted");
     expect(await fake.request("https://www.example.test/photo.png", "image")).toBe("aborted");
+    expect(await fake.request("http://[::ffff:10.0.0.5]/", "fetch")).toBe("aborted");
+    expect(await fake.request("http://2130706433/", "fetch")).toBe("aborted");
+    expect(await fake.request("http://metadata.google.internal/computeMetadata/v1/", "xhr")).toBe("aborted");
+    expect(await fake.request("https://user:pw@www.example.test/", "document")).toBe("aborted");
+    expect(await fake.request("file:///etc/passwd", "document")).toBe("aborted");
   });
 
   it("times out a hanging navigation and still closes everything", async () => {

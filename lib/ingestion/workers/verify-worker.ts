@@ -20,7 +20,7 @@ export interface VerificationDeps extends SourceRunDeps {
   log?: (message: string) => void;
 }
 
-export type FindingCode = "missed_daily_run" | "source_failing" | "source_stale" | "recheck_failed" | "owned_event_not_seen" | "cancellation_pending";
+export type FindingCode = "missed_daily_run" | "source_failing" | "source_stale" | "recheck_failed" | "owned_event_not_seen" | "cancellation_pending" | "recheck_incomplete";
 export interface VerificationFinding {
   code: FindingCode;
   severity: "error" | "warning";
@@ -36,6 +36,8 @@ export interface VerificationSummary {
   publishMode: string;
   ownedUpcomingEvents: number;
   sourcesRechecked: number;
+  /** Rechecks that actually completed; `sourcesRechecked` counts every attempt, including failures. */
+  sourcesSucceeded: number;
   updatesApplied: number;
   archivesApplied: number;
   /** Changes or cancellations the source reported that shadow mode deliberately did not apply. */
@@ -44,7 +46,7 @@ export interface VerificationSummary {
 }
 
 function emptySummary(status: VerificationStatus, runId: string | null, publishMode: string, findings: VerificationFinding[] = []): VerificationSummary {
-  return { status, runId, publishMode, ownedUpcomingEvents: 0, sourcesRechecked: 0, updatesApplied: 0, archivesApplied: 0, updatesShadowed: 0, findings };
+  return { status, runId, publishMode, ownedUpcomingEvents: 0, sourcesRechecked: 0, sourcesSucceeded: 0, updatesApplied: 0, archivesApplied: 0, updatesShadowed: 0, findings };
 }
 
 /** Failure and freshness checks that need no network access. */
@@ -72,7 +74,7 @@ export async function detectOperationalFindings(client: IngestionClient, now: Da
 }
 
 /** Upcoming candidates ingestion published and still owns (not manually edited or claimed by an organizer). */
-async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<CandidateRow[]> {
+async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<{ owned: CandidateRow[]; capped: boolean }> {
   const { data, error } = await ingestionDb(client)
     .from("candidates")
     .select("*")
@@ -83,7 +85,7 @@ async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<Ca
     .limit(MAX_RECHECKED_EVENTS);
   throwIfError("Failed to load published candidates", error);
   const candidates = (data ?? []) as CandidateRow[];
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) return { owned: [], capped: false };
 
   const { data: links, error: linkError } = await client
     .from("event_ingestion_links")
@@ -92,7 +94,7 @@ async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<Ca
     .eq("management_state", "ingestion");
   if (linkError) throw new Error(`Failed to load ownership links: ${sanitizeForLog(linkError.message)}`);
   const owned = new Set(((links ?? []) as { candidate_id: string }[]).map((l) => l.candidate_id));
-  return candidates.filter((c) => owned.has(c.id));
+  return { owned: candidates.filter((c) => owned.has(c.id)), capped: candidates.length >= MAX_RECHECKED_EVENTS };
 }
 
 /**
@@ -125,13 +127,19 @@ export async function runVerification(deps: VerificationDeps): Promise<Verificat
   try {
     summary.findings.push(...(await detectOperationalFindings(client, now, deps.missedRunHours ?? DEFAULT_MISSED_RUN_HOURS, deps.sourceStaleDays ?? DEFAULT_SOURCE_STALE_DAYS)));
 
-    const owned = await listOwnedUpcoming(client, now);
+    const { owned, capped } = await listOwnedUpcoming(client, now);
+    if (capped) {
+      summary.findings.push({ code: "recheck_incomplete", severity: "warning", message: `More than ${MAX_RECHECKED_EVENTS} published upcoming candidates exist; only the soonest ${MAX_RECHECKED_EVENTS} were considered for recheck` });
+    }
     summary.ownedUpcomingEvents = owned.length;
     const bySource = new Map<string, CandidateRow[]>();
     for (const candidate of owned) bySource.set(candidate.primary_source_id, [...(bySource.get(candidate.primary_source_id) ?? []), candidate]);
 
     for (const [sourceId, candidates] of bySource) {
-      if (deadline.signal.aborted) break;
+      if (deadline.signal.aborted) {
+        summary.findings.push({ code: "recheck_incomplete", severity: "error", message: "The run deadline passed before every source with owned upcoming events was rechecked" });
+        break;
+      }
       const source: SourceRow | null = await getSourceById(client, sourceId);
       if (!source || !source.enabled || source.trust_state === "disabled") {
         summary.findings.push({ code: "recheck_failed", severity: "warning", sourceId, message: `${source?.name ?? sourceId}: source is disabled; ${candidates.length} owned upcoming event(s) not rechecked` });
@@ -154,6 +162,7 @@ export async function runVerification(deps: VerificationDeps): Promise<Verificat
         summary.findings.push({ code: "recheck_failed", severity: "warning", sourceId, message: `${source.name}: ${report.failureKind ?? "failed"}: ${report.error ?? ""}`.trim() });
         continue;
       }
+      summary.sourcesSucceeded += 1;
       if (report.updatesShadowed > 0) {
         summary.findings.push({ code: "cancellation_pending", severity: "warning", sourceId, message: `${source.name}: ${report.updatesShadowed} source change(s) or cancellation(s) not applied in shadow mode` });
       }
@@ -176,7 +185,7 @@ export async function runVerification(deps: VerificationDeps): Promise<Verificat
     await finishRun(client, run.id, {
       status: summary.status,
       sourcesAttempted: summary.sourcesRechecked,
-      sourcesSucceeded: summary.sourcesRechecked,
+      sourcesSucceeded: summary.sourcesSucceeded,
       errorSummary: summary.findings.length > 0 ? summary.findings.map((f) => `${f.code}: ${f.message}`).join("; ").slice(0, 1000) : null,
       metadata: {
         publishMode: config.publishMode,

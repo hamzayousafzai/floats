@@ -29,6 +29,13 @@ export type ValidationReason =
   | "incomplete_title"
   | "unclear_event_type";
 
+export interface SourceCoordinates {
+  latitude: number;
+  longitude: number;
+  /** Where the pair was read from. Only structured data attached to the same place as the address qualifies. */
+  origin: "jsonld-place-geo";
+}
+
 export interface RawEvent {
   sourceId: string;
   externalEventId: string | null;
@@ -40,6 +47,8 @@ export interface RawEvent {
   organizerName: string | null;
   venueName: string | null;
   address: string | null;
+  /** Coordinates published by the source next to its address. Unverified unless the source is explicitly trusted for them. */
+  coordinates?: SourceCoordinates | null;
   vendorCount: number | null;
   evidence: string[];
   categories: string[];

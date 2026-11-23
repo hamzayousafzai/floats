@@ -17,15 +17,8 @@ export async function main(): Promise<void> {
     userAgent: config.userAgent,
     minDelayMs: 1000,
   });
-  const registry = createAdapterRegistry(
-    { fetchPage: createFetchPage(config, { robots }) },
-    {
-      userAgent: config.userAgent,
-      navigationTimeoutMs: config.httpTimeoutMs,
-      maxHtmlBytes: config.maxResponseBytes,
-      isAllowed: (url) => robots.isAllowed(url),
-    },
-  );
+  // Browser rendering is intentionally not registered: see the containment note in adapters/playwright.ts.
+  const registry = createAdapterRegistry({ fetchPage: createFetchPage(config, { robots }) });
 
   console.log(`[ingest:verify] starting in ${config.publishMode} mode`);
   const summary = await runVerification({ client, config, registry, log: (message) => console.log(message) });

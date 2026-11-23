@@ -267,7 +267,7 @@ function ReviewPanel({ detail, onChanged }: { detail: CandidateDetail; onChanged
       {detail.status === "approved" ? (
         <section className="space-y-2 rounded-lg border p-4">
           <h3 className="font-medium">Publication</h3>
-          <p className="text-sm text-gray-600">Approval does not publish. Publishing creates a public event if all publication gates pass.</p>
+          <p className="text-sm text-gray-600">Approval does not publish. Publishing creates a public event if all publication gates pass, even while automatic publishing is in shadow mode.</p>
           <button type="button" disabled={busy} onClick={() => setPending("publish")} className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
             Publish manually
           </button>

@@ -133,3 +133,8 @@ export const UPDATES_MIGRATION_PATH = path.resolve(here, "../../../supabase/migr
 export function readUpdatesMigration() {
   return readFileSync(UPDATES_MIGRATION_PATH, "utf8");
 }
+
+export const DELETION_POLICY_MIGRATION_PATH = path.resolve(here, "../../../supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql");
+export function readDeletionPolicyMigration() {
+  return readFileSync(DELETION_POLICY_MIGRATION_PATH, "utf8");
+}

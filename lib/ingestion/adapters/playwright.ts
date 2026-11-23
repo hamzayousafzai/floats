@@ -54,8 +54,14 @@ async function quietly(action: () => Promise<unknown>): Promise<void> {
 }
 
 /**
- * Renders a JavaScript page with bounded navigation and always closes the browser. Every browser-initiated request
- * (document, script, XHR, redirects) is checked against the same public-address rules as `safeFetch`.
+ * Renders a JavaScript page with bounded navigation and always closes the browser.
+ *
+ * NOT SSRF-SAFE, therefore NOT WIRED INTO ANY WORKER. The route handler validates and resolves each request's host, but
+ * Chromium then resolves the name again itself and `route.continue()` cannot pin the connection to the validated IP, so
+ * DNS rebinding (and redirects chained inside the browser) can still reach private addresses. `safeFetch` pins the
+ * connection; this adapter cannot. The worker scripts therefore do not register it and sources typed `playwright` fail
+ * with `adapter_unavailable`. Enable only behind an egress-restricted network or proxy that blocks private/metadata
+ * ranges at the network layer, with tests against that proxy.
  */
 export function createPlaywrightAdapter(deps: PlaywrightAdapterDeps): EventAdapter {
   const resolve = deps.resolve ?? defaultResolve;

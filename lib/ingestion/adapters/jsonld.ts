@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
-import type { CollectionResult, RawEvent } from "@/lib/ingestion/types";
+import type { CollectionResult, RawEvent, SourceCoordinates } from "@/lib/ingestion/types";
+import { isValidCoordinate } from "@/lib/ingestion/validation/within-radius";
 import { type AdapterDeps, ParserStructureError, cleanText, collectionFailure, collectionSuccess, emptyRawEvent, extractVendorEvidence, resolveUrl } from "./common";
 import type { CollectionContext, EventAdapter, SourceDefinition } from "./types";
 
@@ -60,6 +61,25 @@ function addressText(value: unknown): string | null {
   return parts.join(", ");
 }
 
+function coordinateNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && /^-?\d{1,3}(\.\d+)?$/.test(value.trim())) return Number(value.trim());
+  return null;
+}
+
+/** Reads schema.org Place.geo only when the same Place also carries a street-level address, so the pair describes one venue. */
+function placeCoordinates(location: unknown): SourceCoordinates | null {
+  if (!isObject(location)) return null;
+  const address = addressText(location.address);
+  if (address === null || !/\b\d{1,6}\s+\S/.test(address)) return null;
+  const geo = Array.isArray(location.geo) ? location.geo[0] : location.geo;
+  if (!isObject(geo)) return null;
+  const latitude = coordinateNumber(geo.latitude);
+  const longitude = coordinateNumber(geo.longitude);
+  if (latitude === null || longitude === null || !isValidCoordinate(latitude, longitude)) return null;
+  return { latitude, longitude, origin: "jsonld-place-geo" };
+}
+
 function dateString(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
@@ -80,6 +100,7 @@ export function eventFromJsonLd(node: Json, source: SourceDefinition, pageUrl: s
   event.organizerName = text(node.organizer);
   event.venueName = isObject(location) ? cleanText(location.name) : null;
   event.address = isObject(location) ? addressText(location.address) : typeof location === "string" ? cleanText(location) : null;
+  event.coordinates = placeCoordinates(location);
   event.vendorCount = vendors.count;
   event.evidence = vendors.evidence;
   event.cancelled = status.includes("cancelled") || status.includes("canceled");

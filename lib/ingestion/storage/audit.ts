@@ -1,6 +1,6 @@
 import { type IngestionClient, ingestionDb, throwIfError } from "./client";
 
-export type AuditAction = "shadow_approved" | "published" | "skipped_duplicate" | "blocked" | "archived" | "updated";
+export type AuditAction = "shadow_approved" | "published" | "skipped_duplicate" | "blocked" | "archived" | "updated" | "event_deleted";
 
 export interface AuditInput {
   candidateId: string;

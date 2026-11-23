@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,10 +41,21 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Markdown is private by default; project docs and Copilot instructions are tracked
 *.md
+!docs/**/*.md
+!.github/**/*.md
+!.github/instructions/*.instructions.md
+.github/instructions/COPILOT_HARDENING_PROMPT.md
 
-# SQL dumps (generated locally, not for version control)
+# Archives and dumps (never tracked)
+*.zip
+*.dump
+*.bak
+
+# SQL: only timestamped migrations are tracked; dumps (functions.sql, patch_functions.sql) are not
 supabase/migrations/*
+!supabase/migrations/20[0-9][0-9]*_*.sql
 data/schema.sql
 data/seeds.sql
 
