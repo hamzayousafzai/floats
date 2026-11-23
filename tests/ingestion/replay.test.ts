@@ -280,11 +280,17 @@ describe("verification", () => {
 
   describe("incomplete verification", () => {
     /** Seeds `count` upcoming ingestion-owned candidates for a disabled source, so nothing is fetched. */
-    function seedOwned(count: number) {
+    function seedOwned(count: number, manualCount = 0) {
       const h = harness();
       const source = h.addSource("Big", { enabled: false });
-      const candidates = h.db.seed("ingestion.candidates", Array.from({ length: count }, (_, i) => ({ primary_source_id: source.id, status: "published", published_event_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, starts_at: "2031-12-06T10:00:00Z", title: `Event ${i}` })));
-      h.db.seed("public.event_ingestion_links", candidates.map((c) => ({ event_id: c.published_event_id, candidate_id: c.id, source_id: source.id, management_state: "ingestion" })));
+      const rows = (n: number, offset: number, startsAt: string, title: string) => Array.from({ length: n }, (_, i) => ({ primary_source_id: source.id, status: "published", published_event_id: `00000000-0000-4000-8000-${String(offset + i).padStart(12, "0")}`, starts_at: startsAt, title: `${title} ${i}` }));
+      // Manual events start earlier, so they sort first and would eat the budget if ownership were applied after the limit.
+      const manual = h.db.seed("ingestion.candidates", rows(manualCount, 100_000, "2031-12-05T10:00:00Z", "Manual"));
+      const candidates = h.db.seed("ingestion.candidates", rows(count, 0, "2031-12-06T10:00:00Z", "Event"));
+      h.db.seed("public.event_ingestion_links", [
+        ...candidates.map((c) => ({ event_id: c.published_event_id, candidate_id: c.id, source_id: source.id, management_state: "ingestion" })),
+        ...manual.map((c) => ({ event_id: c.published_event_id, candidate_id: c.id, source_id: source.id, management_state: "manual" })),
+      ]);
       return h;
     }
     const capFindings = (s: { findings: { code: string }[] }) => s.findings.filter((f) => f.code === "recheck_incomplete");
@@ -319,12 +325,125 @@ describe("verification", () => {
       expect(summary.sourcesRechecked).toBeLessThan(2);
     });
 
-    it("never rechecks while a collection run is in progress", async () => {
-      const { h } = await withOwnedEvent();
-      h.db.seed("ingestion.runs", [{ run_type: "collection", status: "running", started_at: new Date(NOW.getTime() - 60_000).toISOString() }]);
+    it.each([100, 500, 1000])("detects overflow when the API truncates every response at max_rows=%i", async (maxRows) => {
+      const over = seedOwned(MAX_RECHECKED_EVENTS + 1);
+      over.db.maxRows = maxRows;
+      const summary = await over.verify();
+      expect(summary.ownedUpcomingEvents).toBe(MAX_RECHECKED_EVENTS);
+      expect(capFindings(summary)).toHaveLength(1);
+
+      const exact = seedOwned(MAX_RECHECKED_EVENTS);
+      exact.db.maxRows = maxRows;
+      const exactSummary = await exact.verify();
+      expect(exactSummary.ownedUpcomingEvents).toBe(MAX_RECHECKED_EVENTS);
+      expect(capFindings(exactSummary)).toEqual([]);
+    });
+
+    it("does not let manual or claimed events consume the recheck budget", async () => {
+      const h = seedOwned(MAX_RECHECKED_EVENTS, 1500);
+      h.db.maxRows = 1000;
       const summary = await h.verify();
-      expect(summary).toMatchObject({ sourcesRechecked: 0, ownedUpcomingEvents: 1 });
-      expect(summary.findings).toContainEqual(expect.objectContaining({ code: "recheck_skipped", severity: "warning" }));
+      expect(summary.ownedUpcomingEvents).toBe(MAX_RECHECKED_EVENTS);
+      expect(capFindings(summary)).toEqual([]);
+    });
+
+    it("never issues an oversized in() filter", async () => {
+      const h = seedOwned(250);
+      const summary = await h.verify();
+      expect(summary.ownedUpcomingEvents).toBe(250);
+      expect(h.db.inSizes.length).toBeGreaterThan(0);
+      expect(Math.max(...h.db.inSizes)).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe("shared pipeline lock", () => {
+    const running = (run_type: string, minutesAgo = 1) => ({ run_type, status: "running", started_at: new Date(NOW.getTime() - minutesAgo * 60_000).toISOString() });
+
+    it.each(["collection", "replay"])("does only read-only checks and rechecks no source while a %s run is in progress", async (holder) => {
+      const { h } = await withOwnedEvent();
+      h.db.seed("ingestion.runs", [{ run_type: "collection", status: "succeeded", started_at: new Date(NOW.getTime() - 3_600_000).toISOString(), finished_at: new Date(NOW.getTime() - 3_000_000).toISOString() }, running(holder)]);
+      const before = h.runs().length;
+      const summary = await h.verify();
+      expect(summary).toMatchObject({ status: "partial", runId: null, sourcesRechecked: 0, ownedUpcomingEvents: 0 });
+      expect(summary.findings).toEqual([expect.objectContaining({ code: "recheck_skipped", severity: "warning", message: expect.stringContaining(holder) })]);
+      expect(h.runs()).toHaveLength(before);
+    });
+
+    it("still reports a missed daily run while another run holds the lock", async () => {
+      const h = harness();
+      h.db.seed("ingestion.runs", [running("collection", 30)]);
+      const summary = await h.verify();
+      expect(summary.status).toBe("failed");
+      expect(summary.findings.map((f) => f.code)).toEqual(["missed_daily_run", "recheck_skipped"]);
+    });
+
+    it("treats a database-level lock conflict as contention, not as a crash", async () => {
+      const h = harness();
+      h.db.failNext.push({ key: "ingestion.runs", op: "insert", error: { code: "23505", message: "duplicate key value violates unique constraint uq_runs_one_running_pipeline" } });
+      const summary = await h.verify();
+      expect(summary.runId).toBeNull();
+      expect(summary.findings).toContainEqual(expect.objectContaining({ code: "recheck_skipped" }));
+    });
+
+    it("lets verification run once the holder is stale", async () => {
+      const h = harness();
+      h.db.seed("ingestion.runs", [running("collection", 5 * 60)]);
+      const summary = await h.verify();
+      expect(summary.runId).not.toBeNull();
+      expect(h.runs().find((r) => r.run_type === "collection")).toMatchObject({ status: "failed" });
+    });
+
+    it("blocks collection and replay while verification runs, but not discovery", async () => {
+      const h = harness();
+      h.addSource("A");
+      h.db.seed("ingestion.runs", [running("verification")]);
+      expect((await h.collect()).status).toBe("skipped_overlap");
+      expect((await h.replay()).status).toBe("skipped_overlap");
+      h.db.seed("ingestion.runs", [{ run_type: "discovery", status: "running", started_at: NOW.toISOString() }]);
+      expect(h.runs().filter((r) => r.status === "running")).toHaveLength(2);
+    });
+  });
+
+  describe("partial collection freshness", () => {
+    const collection = (status: string, hoursAgo: number, extra: Record<string, unknown> = {}) => ({ run_type: "collection", status, started_at: new Date(NOW.getTime() - (hoursAgo + 0.5) * 3_600_000).toISOString(), finished_at: new Date(NOW.getTime() - hoursAgo * 3_600_000).toISOString(), ...extra });
+
+    it("counts a recent partial run as the daily heartbeat but always warns about it", async () => {
+      const h = harness();
+      h.addSource("Good", { last_attempt_at: NOW.toISOString(), last_success_at: NOW.toISOString() });
+      h.db.seed("ingestion.runs", [collection("partial", 2, { sources_attempted: 3, sources_succeeded: 2, error_summary: "Bad Source: timeout" })]);
+      const summary = await h.verify();
+      expect(summary.findings.map((f) => f.code)).toEqual(["collection_partial"]);
+      expect(summary.findings[0]).toMatchObject({ severity: "warning", message: expect.stringMatching(/2 of 3 attempted.*Bad Source: timeout/) });
+      expect(summary.status).toBe("partial");
+    });
+
+    it("does not warn when the latest finished run succeeded after an older partial one", async () => {
+      const h = harness();
+      h.addSource("Good", { last_attempt_at: NOW.toISOString(), last_success_at: NOW.toISOString() });
+      h.db.seed("ingestion.runs", [collection("partial", 30), collection("succeeded", 2)]);
+      expect(await h.verify()).toMatchObject({ status: "succeeded", findings: [] });
+    });
+
+    it("fails with a missed run when only failed runs exist or the last partial run is older than the limit", async () => {
+      const onlyFailed = harness();
+      onlyFailed.db.seed("ingestion.runs", [collection("failed", 2)]);
+      const a = await onlyFailed.verify();
+      expect(a.status).toBe("failed");
+      expect(a.findings.map((f) => f.code)).toEqual(["missed_daily_run"]);
+
+      const oldPartial = harness();
+      oldPartial.db.seed("ingestion.runs", [collection("partial", 40), collection("failed", 2)]);
+      const b = await oldPartial.verify();
+      expect(b.status).toBe("failed");
+      expect(b.findings.map((f) => f.code)).toContain("missed_daily_run");
+    });
+
+    it("surfaces a source the partial run never reached as stale after the source limit", async () => {
+      const h = harness();
+      h.addSource("Skipped by deadline", { last_success_at: new Date(NOW.getTime() - 4 * 86_400_000).toISOString(), last_attempt_at: new Date(NOW.getTime() - 4 * 86_400_000).toISOString() });
+      h.db.seed("ingestion.runs", [collection("partial", 2, { sources_attempted: 1, sources_succeeded: 1 })]);
+      const summary = await h.verify();
+      expect(summary.findings.map((f) => f.code).sort()).toEqual(["collection_partial", "source_stale"]);
     });
   });
 });

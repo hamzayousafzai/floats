@@ -6,7 +6,7 @@ import { MemoryDb } from "./helpers/memory-db";
 import type { IngestionClient } from "@/lib/ingestion/storage/client";
 import { IngestionStorageError, assertIngestionSchemaAccessible, createIngestionClient } from "@/lib/ingestion/storage/client";
 import { getEnabledSources, getSourceById, updateSourceMetrics, upsertSource } from "@/lib/ingestion/storage/sources";
-import { createRun, finishRun, findActiveRun, listRuns } from "@/lib/ingestion/storage/runs";
+import { PIPELINE_RUN_TYPES, RunInProgressError, abandonStaleRuns, createRun, finishRun, findActiveRun, getLastSuccessfulRun, getLatestFinishedRun, listRuns } from "@/lib/ingestion/storage/runs";
 import { getObservationByIdentity, hashPayload, saveObservation } from "@/lib/ingestion/storage/observations";
 import {
   type CandidateUpsertInput,
@@ -221,6 +221,54 @@ describe("runs", () => {
     expect(done.finished_at).not.toBeNull();
     expect(await findActiveRun(client, "collection", 60)).toBeNull();
     expect((await listRuns(client, 10)).map((r) => r.id)).toEqual([run.id]);
+  });
+
+  describe("shared pipeline lock", () => {
+    it.each(PIPELINE_RUN_TYPES.flatMap((held) => PIPELINE_RUN_TYPES.map((wanted) => [held, wanted] as const)))("a running %s run blocks starting a %s run", async (held, wanted) => {
+      const { client } = setup();
+      const run = await createRun(client, held, {});
+      await expect(createRun(client, wanted, {})).rejects.toBeInstanceOf(RunInProgressError);
+      expect((await findActiveRun(client, wanted, 60))?.id).toBe(run.id);
+      await finishRun(client, run.id, { status: "succeeded" });
+      await expect(createRun(client, wanted, {})).resolves.toMatchObject({ status: "running" });
+    });
+
+    it("keeps discovery outside the pipeline lock", async () => {
+      const { client } = setup();
+      await createRun(client, "collection", {});
+      await expect(createRun(client, "discovery", {})).resolves.toMatchObject({ run_type: "discovery" });
+      await expect(createRun(client, "discovery", {})).rejects.toBeInstanceOf(RunInProgressError);
+      expect(await findActiveRun(client, "discovery", 60)).toMatchObject({ run_type: "discovery" });
+    });
+
+    it("sweeps a stale run of any pipeline type but leaves discovery to its own sweep", async () => {
+      const { db, client } = setup();
+      const old = new Date(Date.now() - 5 * 3600_000).toISOString();
+      db.seed("ingestion.runs", [{ run_type: "replay", status: "running", started_at: old }, { run_type: "discovery", status: "running", started_at: old }]);
+      expect(await abandonStaleRuns(client, "collection", 90)).toBe(1);
+      expect(db.rows("ingestion.runs").map((r) => `${r.run_type}:${r.status}`).sort()).toEqual(["discovery:running", "replay:failed"]);
+    });
+
+    it("names the lock group in the error and still reports discovery by its own type", async () => {
+      const { client } = setup();
+      await createRun(client, "collection", {});
+      await expect(createRun(client, "verification", {})).rejects.toThrow(/collection, verification or replay.*verification/);
+      await createRun(client, "discovery", {});
+      await expect(createRun(client, "discovery", {})).rejects.toThrow("A discovery run is already in progress");
+    });
+  });
+
+  it("treats a partial run as the freshness heartbeat and exposes the latest finished run separately", async () => {
+    const { db, client } = setup();
+    const at = (h: number) => `2031-11-20T0${h}:00:00.000Z`;
+    const [, partial, failed] = db.seed("ingestion.runs", [
+      { run_type: "collection", status: "succeeded", started_at: at(1) },
+      { run_type: "collection", status: "partial", started_at: at(2) },
+      { run_type: "collection", status: "failed", started_at: at(3) },
+    ]);
+    expect((await getLastSuccessfulRun(client, "collection"))?.id).toBe(partial.id);
+    expect((await getLatestFinishedRun(client, "collection"))?.id).toBe(failed.id);
+    expect(await getLatestFinishedRun(client, "replay")).toBeNull();
   });
 });
 

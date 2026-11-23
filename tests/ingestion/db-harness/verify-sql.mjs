@@ -1,6 +1,6 @@
 // Executes the migration and the publisher scenarios on the substitute PostgreSQL (see harness.mjs).
 import { createHash, randomUUID } from "node:crypto";
-import { startServer, connect, makePool, bootstrapDatabase, readMigration, readUpdatesMigration, readDeletionPolicyMigration } from "./harness.mjs";
+import { startServer, connect, makePool, bootstrapDatabase, readMigration, readUpdatesMigration, readDeletionPolicyMigration, readRunLockMigration, readStagingChecks, readStagingWriteChecks } from "./harness.mjs";
 
 const results = [];
 let currentVariant = "";
@@ -83,6 +83,37 @@ async function run(port, variant) {
   await c.query(readMigration());
   await c.query(readUpdatesMigration());
   await c.query(readDeletionPolicyMigration());
+  // Upgrade path: a database that already allowed overlapping pipeline runs must migrate cleanly, keeping only the newest.
+  const legacyOlder = (await c.query("insert into ingestion.runs (run_type, status, started_at) values ('collection','running', now() - interval '10 minutes') returning id")).rows[0].id;
+  const legacyNewer = (await c.query("insert into ingestion.runs (run_type, status, started_at) values ('verification','running', now() - interval '5 minutes') returning id")).rows[0].id;
+  const legacyDiscovery = (await c.query("insert into ingestion.runs (run_type, status) values ('discovery','running') returning id")).rows[0].id;
+  await c.query(readRunLockMigration());
+  const legacyStatus = async (id) => (await c.query("select status from ingestion.runs where id = $1", [id])).rows[0].status;
+  check("run lock migration closes older overlapping pipeline runs and keeps the newest", (await legacyStatus(legacyOlder)) === "failed" && (await legacyStatus(legacyNewer)) === "running", `${await legacyStatus(legacyOlder)}/${await legacyStatus(legacyNewer)}`);
+  check("run lock migration leaves discovery runs alone", (await legacyStatus(legacyDiscovery)) === "running");
+  await c.query("update ingestion.runs set status = 'failed', finished_at = now() where status = 'running'");
+  await c.query(readRunLockMigration());
+  check("run lock migration is re-runnable", true);
+  // The operator's staging query must be valid SQL and report no FAIL on a correctly migrated database (REVIEW and n/a rows are expected here).
+  const staging = (await c.query(readStagingChecks())).rows;
+  const stagingFailures = staging.filter((r) => r.status === "FAIL");
+  check("staging checks SQL runs and reports no FAIL on the migrated harness database", staging.length >= 25 && stagingFailures.length === 0, JSON.stringify(stagingFailures));
+  check("staging checks SQL lists the public.events triggers for human review", staging.some((r) => r.status === "REVIEW" && /events_geom_trg/.test(r.detail ?? "")));
+  // Negative cases, each undone by the rollback: the query must actually catch the hazards it exists for.
+  const failingChecksAfter = async (setup) => {
+    await c.query("begin");
+    try {
+      await c.query(setup);
+      return (await c.query(readStagingChecks())).rows.filter((r) => r.status === "FAIL").map((r) => r.check_name);
+    } finally {
+      await c.query("rollback");
+    }
+  };
+  check("staging checks SQL flags a function that calls the production project", (await failingChecksAfter(`create function public.calls_prod() returns void language sql as $f$ select 'https://inxlsvowzpqvfulhbnou.supabase.co/functions/v1/geocode-event-address' $f$`)).some((n) => /production project ref/.test(n)));
+  check("staging checks SQL flags anon access to an ingestion table", (await failingChecksAfter("grant select on ingestion.sources to anon")).some((n) => /hold no privilege/.test(n)));
+  check("staging checks SQL flags anon execute on a publisher function", (await failingChecksAfter("grant execute on function ingestion.apply_review(uuid,uuid,text,text,jsonb,timestamptz,jsonb,boolean) to anon")).some((n) => /no ingestion function is executable/.test(n)));
+  check("staging checks SQL flags disabled row level security", (await failingChecksAfter("alter table ingestion.reviews disable row level security")).some((n) => /row level security/.test(n)));
+  check("staging checks SQL flags a missing lock index", (await failingChecksAfter("drop index ingestion.uq_runs_one_running_pipeline")).some((n) => /run lock/.test(n)));
   const tables = (await c.query(`select table_name from information_schema.tables where table_schema='ingestion' order by 1`)).rows.map((r) => r.table_name);
   check("eight ingestion tables", JSON.stringify(tables) === JSON.stringify(["candidate_sources", "candidates", "observations", "publication_audit", "reviews", "runs", "source_discoveries", "sources"]), tables.join(","));
   check("public.event_ingestion_links exists", (await count(c, "information_schema.tables", "table_schema='public' and table_name='event_ingestion_links'")) === 1);
@@ -280,8 +311,27 @@ async function run(port, variant) {
   await verifyReviews(c, src, port, dbName);
   await verifyRunLock(c);
   await verifyEventDeletion(c, src, adminUser);
+  await verifyStagingWriteChecks(c);
 
   await c.end();
+}
+
+/** The operator's rolled-back write script must pass here, leave no trace, and refuse to run against a production-calling baseline. */
+async function verifyStagingWriteChecks(c) {
+  const snapshot = async () => `${await count(c, "public.events")}/${await count(c, "ingestion.sources")}/${await count(c, "ingestion.candidates")}/${await count(c, "ingestion.publication_audit")}`;
+  const before = await snapshot();
+  const results = await c.query(readStagingWriteChecks());
+  const table = results.find((r) => r.fields?.some((f) => f.name === "check_name"));
+  const rows = table?.rows ?? [];
+  const failures = rows.filter((r) => r.status === "FAIL" || r.status === "REVIEW");
+  check("staging write checks SQL runs and every check passes", rows.length >= 20 && failures.length === 0, JSON.stringify(failures.length ? failures : rows.length));
+  check("staging write checks SQL leaves no rows behind", (await snapshot()) === before, `${before} -> ${await snapshot()}`);
+  await c.query("begin");
+  await c.query(`create function public.calls_prod() returns void language sql as $f$ select 'https://inxlsvowzpqvfulhbnou.supabase.co/functions/v1/x' $f$`);
+  const refused = await rejects(c.query(readStagingWriteChecks()));
+  await c.query("rollback");
+  check("staging write checks SQL refuses to run when a function references the production project", /Refusing to run/.test(String(refused)), String(refused));
+  check("staging write checks SQL left the session usable after the refusal", (await snapshot()) === before);
 }
 
 async function verifyEventDeletion(c, src, adminUser) {
@@ -330,11 +380,18 @@ async function verifyEventDeletion(c, src, adminUser) {
 
 async function verifyRunLock(c) {
   const open = (type) => c.query("insert into ingestion.runs (run_type, status) values ($1, 'running') returning id", [type]);
+  // Earlier scenarios leave a default-status (running) collection run behind; close it so the lock starts free.
+  await c.query("update ingestion.runs set status = 'failed', finished_at = now() where status = 'running'");
   const first = await open("verification");
   check("run lock: second running run of the same type is refused", (await rejects(open("verification"))) !== null);
-  check("run lock: a different run type may run concurrently", (await rejects(open("replay"))) === null);
+  check("run lock: collection and replay are refused while verification runs", (await rejects(open("collection"))) !== null && (await rejects(open("replay"))) !== null);
+  const discovery = await open("discovery");
+  check("run lock: discovery runs independently of the pipeline lock", discovery.rowCount === 1 && (await rejects(open("discovery"))) !== null);
+  await c.query("update ingestion.runs set status = 'failed', finished_at = now() where id = $1", [discovery.rows[0].id]);
   await c.query("update ingestion.runs set status = 'failed', finished_at = now() where id = $1", [first.rows[0].id]);
-  check("run lock: released when the run is closed", (await rejects(open("verification"))) === null);
+  check("run lock: released when the run is closed", (await rejects(open("collection"))) === null);
+  check("run lock: the new holder blocks verification", (await rejects(open("verification"))) !== null);
+  await c.query("update ingestion.runs set status = 'failed', finished_at = now() where status = 'running'");
 }
 
 const UPDATE = "select ingestion.update_imported_event($1::uuid, $2::jsonb, $3, $4, $5, 35)";

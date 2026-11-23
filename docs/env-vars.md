@@ -3,6 +3,8 @@
 Create a `.env.local` file in the `floats/` directory. This file is gitignored and must be set up manually.
 
 > `.env.example` exists but covers only the ingestion workers (`INGESTION_*`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). It does not list `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `RESEND_API_KEY`, `CRON_SECRET` or `CHECKIN_DEBUG`, so this document is the reference for the web app. Do not copy `.env.example` over an app `.env.local` without adding those keys, and never point either file at production for tests or ingestion runs.
+>
+> `npm run ingest:staging-check` (operator-only, read-only) additionally reads `INGESTION_STAGING_CONFIRM` (must be `staging-not-production`), `INGESTION_STAGING_PROJECT_REF` (must match the URL), optional `INGESTION_STAGING_AUTHENTICATED_JWT` and optional `INGESTION_PRODUCTION_PROJECT_REFS` (comma-separated refs that must never match), together with `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`. Set them per shell session with STAGING values only. See `docs/operations/automated-event-ingestion-staging-setup.md`.
 
 ---
 

@@ -34,7 +34,7 @@ jobs:
       - name: Collect
         timeout-minutes: 30
         run: npm run ingest:daily
-      # Runs even when collection fails or times out. Steps are sequential in one job, and the verifier refuses to recheck while a collection run is still marked running, so the two never write concurrently.
+      # Runs even when collection fails or times out. Steps are sequential in one job, and collection, verification and replay share one database run lock, so they can never run concurrently; if another run holds it, verify only performs its read-only checks.
       - name: Verify
         if: ${{ !cancelled() }}
         timeout-minutes: 20

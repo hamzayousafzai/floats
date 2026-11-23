@@ -46,6 +46,14 @@ function matches(row: Row, cols: string[], other: Row): boolean {
   return cols.every((c) => row[c] !== null && row[c] !== undefined && row[c] === other[c]);
 }
 
+/** Mirrors uq_runs_one_running_per_type plus uq_runs_one_running_pipeline (collection, verification and replay share one lock). */
+const PIPELINE_TYPES = ["collection", "verification", "replay"];
+function runLockClash(existing: Row, candidate: Row): boolean {
+  if (existing.status !== "running" || candidate.status !== "running") return false;
+  if (existing.run_type === candidate.run_type) return true;
+  return PIPELINE_TYPES.includes(existing.run_type as string) && PIPELINE_TYPES.includes(candidate.run_type as string);
+}
+
 function compare(a: unknown, b: unknown): number {
   if (a === b) return 0;
   if (a === null || a === undefined) return -1;
@@ -59,6 +67,10 @@ export class MemoryDb {
   readonly rpcHandlers = new Map<string, (args: Row) => { data?: unknown; error?: MemoryError | null }>();
   readonly rpcCalls: { name: string; args: Row }[] = [];
   failNext: { key: string; op: string; error: MemoryError }[] = [];
+  /** Like PostgREST's `max_rows`: a single select never returns more rows than this, whatever limit/range was requested. */
+  maxRows: number | null = null;
+  /** Length of every `in (...)` list sent, so tests can assert filters stay within URL limits. */
+  readonly inSizes: number[] = [];
 
   rows(key: string): Row[] {
     if (!this.tables.has(key)) this.tables.set(key, []);
@@ -94,6 +106,7 @@ class Builder implements PromiseLike<Result> {
   private filters: Filter[] = [];
   private orders: { col: string; asc: boolean }[] = [];
   private limitN: number | null = null;
+  private offsetN = 0;
   private returning = false;
   private mode: "many" | "single" | "maybe" = "many";
 
@@ -106,7 +119,7 @@ class Builder implements PromiseLike<Result> {
   delete() { this.op = "delete"; return this; }
   eq(c: string, v: unknown) { this.filters.push((r) => r[c] === v); return this; }
   neq(c: string, v: unknown) { this.filters.push((r) => r[c] !== v); return this; }
-  in(c: string, v: unknown[]) { this.filters.push((r) => v.includes(r[c])); return this; }
+  in(c: string, v: unknown[]) { this.db.inSizes.push(v.length); this.filters.push((r) => v.includes(r[c])); return this; }
   gte(c: string, v: unknown) { this.filters.push((r) => compare(r[c], v) >= 0); return this; }
   gt(c: string, v: unknown) { this.filters.push((r) => compare(r[c], v) > 0); return this; }
   lte(c: string, v: unknown) { this.filters.push((r) => compare(r[c], v) <= 0); return this; }
@@ -126,7 +139,7 @@ class Builder implements PromiseLike<Result> {
   }
   order(col: string, o: { ascending?: boolean } = {}) { this.orders.push({ col, asc: o.ascending !== false }); return this; }
   limit(n: number) { this.limitN = n; return this; }
-  range(from: number, to: number) { this.limitN = to - from + 1; return this; }
+  range(from: number, to: number) { this.offsetN = from; this.limitN = to - from + 1; return this; }
   single() { this.mode = "single"; return this; }
   maybeSingle() { this.mode = "maybe"; return this; }
 
@@ -146,7 +159,7 @@ class Builder implements PromiseLike<Result> {
 
   private violates(candidate: Row, ignore?: Row): boolean {
     const uniques = UNIQUES[this.key] ?? [];
-    return this.db.rows(this.key).some((r) => r !== ignore && uniques.some((cols) => matches(r, cols, candidate)));
+    return this.db.rows(this.key).some((r) => r !== ignore && (uniques.some((cols) => matches(r, cols, candidate)) || (this.key === "ingestion.runs" && runLockClash(r, candidate))));
   }
 
   private insertRow(input: Row): Row {
@@ -194,7 +207,8 @@ class Builder implements PromiseLike<Result> {
     }
     const sorted = [...selected];
     for (const { col, asc } of [...this.orders].reverse()) sorted.sort((a, b) => (asc ? 1 : -1) * compare(a[col], b[col]));
-    const limited = this.limitN === null ? sorted : sorted.slice(0, this.limitN);
+    const windowed = this.limitN === null ? sorted.slice(this.offsetN) : sorted.slice(this.offsetN, this.offsetN + this.limitN);
+    const limited = this.db.maxRows === null ? windowed : windowed.slice(0, this.db.maxRows);
     this.returning = true;
     return this.finish(limited);
   }

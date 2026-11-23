@@ -189,6 +189,18 @@ describe("migration 20261121000100: event deletion policy", () => {
   });
 });
 
+describe("migration 20261122000100: shared pipeline run lock", () => {
+  const sql = read("supabase/migrations/20261122000100_ingestion_pipeline_run_lock.sql").replace(/--.*$/gm, "");
+  it("allows one running pipeline run across collection, verification and replay, and not discovery", () => {
+    expect(sql).toMatch(/create unique index if not exists uq_runs_one_running_pipeline\s+on ingestion\.runs \(\(true\)\)\s+where status = 'running' and run_type in \('collection', 'verification', 'replay'\)/);
+    expect(sql).not.toMatch(/discovery/);
+  });
+  it("only closes overlapping runs and changes no privileges or data definitions", () => {
+    expect(sql).toMatch(/set status = 'failed'/);
+    expect(sql).not.toMatch(/\b(grant|revoke|drop|delete|truncate|alter table)\b/i);
+  });
+});
+
 describe("migrations: privileges, RLS and definer functions", () => {
   const sql = walk("supabase/migrations", (f) => /automated_event_ingestion|ingestion_updates/.test(f)).map(read).join("\n");
 

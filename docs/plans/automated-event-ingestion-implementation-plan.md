@@ -278,79 +278,11 @@ Execute `TASK-01` through `TASK-28` **in order**, without skipping dependencies.
 
 **Create:** `.github/workflows/ingestion-daily.yml`, `.github/workflows/ingestion-discovery.yml`.
 
-**Action:** Use the complete YAML below. Keep literal `shadow` in both; live activation requires a separate reviewed change. GitHub secrets `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` must be configured separately. No jobs on untrusted PRs.
+**Action:** Use the workflow files in the repository (the YAML originally pasted in this plan is superseded; see below). Keep literal `shadow` in both; live activation requires a separate reviewed change. GitHub secrets `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` must be configured separately. No jobs on untrusted PRs.
 
-Daily file, verbatim:
+Daily file: see `.github/workflows/ingestion-daily.yml`, which is the source of truth. The YAML originally pasted here was superseded by the review hardening and is intentionally not repeated: actions are pinned to full SHAs, Chromium is not installed, the job has a 60-minute budget with a 30-minute `Collect` step and a 20-minute `Verify` step (`if: ${{ !cancelled() }}`), and the concurrency group is `floats-ingestion-daily`.
 
-```yaml
-name: Floats Daily Event Ingestion
-on:
-  schedule:
-    - cron: '15 9 * * *'
-  workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: floats-ingestion-daily
-  cancel-in-progress: false
-jobs:
-  ingest:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      INGESTION_PUBLISH_MODE: shadow
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Install
-        run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Collect
-        run: npm run ingest:daily
-```
-
-Discovery file, verbatim:
-
-```yaml
-name: Floats Weekly Source Discovery
-on:
-  schedule:
-    - cron: '15 10 * * 0'
-  workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: floats-ingestion-discovery
-  cancel-in-progress: false
-jobs:
-  discover:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      INGESTION_PUBLISH_MODE: shadow
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Install
-        run: npm ci
-      - name: Discover
-        run: npm run ingest:discover
-```
+Discovery file: see `.github/workflows/ingestion-discovery.yml` (source of truth; actions pinned to full SHAs, shadow mode, concurrency group `floats-ingestion-discovery`, 30-minute timeout). Discovery keeps its own per-type run lock and is outside the shared pipeline lock.
 
 **Dependencies:** TASK-22, TASK-23.
 

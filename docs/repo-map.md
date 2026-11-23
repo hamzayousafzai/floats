@@ -140,8 +140,14 @@ floats/
 ├── supabase/                   # Local Supabase migration files
 │   └── migrations/
 │       ├── 20260501000000_add_event_url.sql   # Adds event_url column + recreates active_events view
-│       ├── functions.sql                      # Full RPC definitions
-│       └── patch_functions.sql               # Incremental RPC patches
+│       ├── 20261120000100_automated_event_ingestion.sql        # ingestion schema, links, publisher function
+│       ├── 20261120000200_ingestion_updates_and_review.sql     # imported-event updates, review functions
+│       ├── 20261121000100_ingestion_event_deletion_policy.sql  # ON DELETE SET NULL, event_deleted audit
+│       ├── 20261122000100_ingestion_pipeline_run_lock.sql      # one running collection/verification/replay run
+│       ├── functions.sql                      # Full RPC definitions (untracked production dump)
+│       └── patch_functions.sql               # Incremental RPC patches (untracked production dump)
+│
+├── docs/operations/            # Ingestion runbook, launch checklist, staging setup guide, staging SQL checks
 │
 ├── scripts/
 │   └── dump-functions.mjs      # Helper to dump DB functions

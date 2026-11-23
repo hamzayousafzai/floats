@@ -17,6 +17,7 @@
     "ingest:replay": "tsx scripts/ingestion/replay.ts",
     "ingest:verify": "tsx scripts/ingestion/verify.ts",
     "ingest:retain": "tsx scripts/ingestion/retain.ts",
+    "ingest:staging-check": "tsx scripts/ingestion/staging-check.ts",
     "test:ingestion": "jest tests/ingestion --runInBand",
     "db:types": "npx supabase gen types typescript --project-id inxlsvowzpqvfulhbnou --schema public > lib/database.types.ts",
     "db:dump": "npx supabase db dump --workdir ..\\supabase --linked -f schema.sql",

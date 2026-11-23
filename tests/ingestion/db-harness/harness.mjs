@@ -138,3 +138,20 @@ export const DELETION_POLICY_MIGRATION_PATH = path.resolve(here, "../../../supab
 export function readDeletionPolicyMigration() {
   return readFileSync(DELETION_POLICY_MIGRATION_PATH, "utf8");
 }
+
+export const RUN_LOCK_MIGRATION_PATH = path.resolve(here, "../../../supabase/migrations/20261122000100_ingestion_pipeline_run_lock.sql");
+export function readRunLockMigration() {
+  return readFileSync(RUN_LOCK_MIGRATION_PATH, "utf8");
+}
+
+/** The read-only verification query an operator runs on the staging project (docs/operations). */
+export const STAGING_CHECKS_PATH = path.resolve(here, "../../../docs/operations/automated-event-ingestion-staging-checks.sql");
+export function readStagingChecks() {
+  return readFileSync(STAGING_CHECKS_PATH, "utf8");
+}
+
+/** The rolled-back write checks (publication, deletion, ownership, role access) an operator runs on the staging project. */
+export const STAGING_WRITE_CHECKS_PATH = path.resolve(here, "../../../docs/operations/automated-event-ingestion-staging-write-checks.sql");
+export function readStagingWriteChecks() {
+  return readFileSync(STAGING_WRITE_CHECKS_PATH, "utf8");
+}

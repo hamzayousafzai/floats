@@ -122,7 +122,8 @@ export async function runReplay(deps: ReplayDeps, options: ReplayOptions = {}): 
   const limit = Math.min(Math.max(Math.trunc(options.limit ?? DEFAULT_REPLAY_LIMIT), 1), MAX_REPLAY_LIMIT);
 
   await abandonStaleRuns(client, "replay", staleMinutes, now);
-  if (await findActiveRun(client, "replay", staleMinutes, now)) return emptySummary("skipped_overlap", null, "A replay run is already in progress");
+  const active = await findActiveRun(client, "replay", staleMinutes, now);
+  if (active) return emptySummary("skipped_overlap", null, `A ${active.run_type} run is already in progress`);
   let run: RunRow;
   try {
     run = await createRun(client, "replay", { sourceId: options.sourceId ?? null, runId: options.runId ?? null, since: options.since ?? null, limit });

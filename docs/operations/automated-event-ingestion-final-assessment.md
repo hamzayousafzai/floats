@@ -1,18 +1,18 @@
 # Automated Event Ingestion - Final Hardening Assessment
 
-Deployment state: **NOT_DEPLOYED**. Nothing was deployed or published, and `.env.local` was never read or used. Branch `ingestion-update`, reviewed at commit `aca5020` plus the uncommitted operational corrections listed below. Three things are separate and none of them is done:
+Deployment state: **NOT_DEPLOYED**. Nothing was deployed or published, and `.env.local` was never read or used. Branch `ingestion-update`, committed at `68d49e0` (earlier hardening: `aca5020`). The corrections of the Supabase-integration-readiness pass (shared run lock, pagination evidence, partial-collection freshness, staging artifacts, doc reconciliation) are uncommitted and staged only. Three things are separate and none of them is done:
 
 | Layer | State |
 |-------|-------|
 | Vercel app deployment (the Next.js web app) | Not performed. The app build passes locally (`build:ci`); Vercel does not run ingestion workers. |
-| Ingestion database deployment (three migrations on a Supabase project) | Not performed. Only a substitute embedded PostgreSQL harness was run. |
+| Ingestion database deployment (four ingestion migrations on a Supabase project, on top of an operator-built baseline) | Not performed. Only a substitute embedded PostgreSQL harness was run. No staging validation has been executed. |
 | Scheduled-worker activation (GitHub Actions schedules) | Not active. Schedules start only when the workflows reach the default branch; until then only `workflow_dispatch` works. |
 
 ## Decisions (separate)
 
 | Decision | Verdict | Why |
 |----------|---------|-----|
-| Isolated shadow run (staging Supabase, shadow mode, no production credentials) | **GO, conditional** | Code and tests are ready. Preconditions are operator steps: isolated project, migrations applied, `ingestion` exposed to the Data API with grants verified, `public.events` triggers listed. Run with `INGESTION_PUBLISH_MODE=shadow`. |
+| Isolated shadow run (staging Supabase, shadow mode, no production credentials) | **GO, conditional** | Code and tests are ready. Preconditions are operator steps in `automated-event-ingestion-staging-setup.md`: isolated project, operator-built baseline with the production geocode URL neutralised, the four migrations applied, `ingestion` exposed to the Data API, `staging-checks.sql`, `staging-write-checks.sql` and `ingest:staging-check` all clean. Run with `INGESTION_PUBLISH_MODE=shadow`. |
 | Merge to `main` (starts scheduled workflows) | **NO-GO** | Needs three reviewed shadow days, ToS and live selector verification, failure notifications, and a decision about the unrelated map UI commits (D6). Schedules start the moment the workflows reach the default branch. |
 | Live automatic publishing | **NO-GO** | No geocoder, no real Supabase/PostGIS evidence, no shadow results, no admin archive action, no owner approval. |
 
@@ -22,10 +22,10 @@ Deployment state: **NOT_DEPLOYED**. Nothing was deployed or published, and `.env
 |-------|---------|--------|
 | Type check | `npx tsc --noEmit` | 30 errors, all in pre-existing `__tests__` files (series-follow 13, cron 12, upload 4, logout 1). No new errors. |
 | Lint | `npm run lint` | 30 errors, all in pre-existing `__tests__` files (`__mocks__/supabase.ts` 11, favorites 9, FavoriteButton 6, check-in 4). No new errors; no warnings in ingestion files. |
-| Jest, SQL suites enabled | `$env:INGESTION_PG_TOOLS_DIR=...; npx jest --ci --runInBand` | 49 suites, 956 tests, all passed |
-| Jest, SQL env unset | `npx jest --ci --runInBand` | 47 passed, 2 suites skipped; 942 passed, 14 skipped. **PARTIAL**: the SQL-gated suites did not run. |
-| Ingestion only | `npm run test:ingestion` | 31 suites, 697 tests passed (SQL env set) |
-| SQL harness | `node tests/ingestion/db-harness/verify-sql.mjs` | 286/286 checks, exit code 0. **Substitute embedded PostgreSQL with a PostGIS shim; not real Supabase.** |
+| Jest, SQL suites enabled | `$env:INGESTION_PG_TOOLS_DIR=...; npx jest --ci --runInBand` | 50 suites, 1003 tests, all passed |
+| Jest, SQL env unset | `npx jest --ci --runInBand` | 48 passed, 2 suites skipped; 989 passed, 14 skipped. **PARTIAL**: the SQL-gated suites did not run. |
+| Ingestion only | `npm run test:ingestion` | 32 suites, 744 tests passed (SQL env set) |
+| SQL harness | `node tests/ingestion/db-harness/verify-sql.mjs` | 318 PASS, 0 FAIL, exit code 0 (both PostGIS-schema variants, `public` and `extensions`). **Substitute embedded PostgreSQL with a PostGIS shim; not real Supabase.** |
 | Build | `npm run build:ci` | Compiled, 17/17 static pages, exit code 0 |
 | actionlint | `actionlint .github/workflows/ingestion-daily.yml .github/workflows/ingestion-discovery.yml` | v1.7.12 (release zip checksum verified against the published checksums), exit code 0, no findings |
 | Real Supabase, PostGIS, PostgREST | not run | BLOCKED: no Docker, no authorized project |
@@ -36,7 +36,7 @@ Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) pr
 
 | Finding | Correction |
 |---------|------------|
-| Collection and verification shared one deadline and timeout | Separate budgets: collection deadline 25 min (step 30), verification deadline 15 min (step 20), job 60. Verify still runs after a collection failure or timeout (`if: !cancelled()`). Verify skips rechecks (`recheck_skipped`) while a collection run is active, so the two never overlap in work |
+| Collection and verification shared one deadline and timeout | Separate budgets: collection deadline 25 min (step 30), verification deadline 15 min (step 20), job 60. Verify still runs after a collection failure or timeout (`if: !cancelled()`). Verify skips rechecks while a collection, replay or verification run holds the shared run lock, but still runs its read-only operational checks and reports `recheck_skipped` (see the second pass below) |
 | `updateSourceMetrics` could move `last_attempt_at` / `last_success_at` backwards under overlapping runs | Timestamps only move forward in attempt time; the compare-and-swap now also covers both timestamps; counters stay exact. Regression tests cover out-of-order completion and concurrent mixed-order writes |
 | Exit codes and the cap were unclear | `succeeded`, `partial`, `skipped_overlap` exit 0 with workflow annotations; `failed` exits 1. The 1000 cap warns only when more than 1000 exist; a missed deadline is an error |
 | An unverified geocoder result suppressed operator-verified source coordinates | Precedence: verified geocode, then operator-verified source coordinates, then an unverified geocode (never verified). Trust, origin, address, precision and radius gates are unchanged |
@@ -63,7 +63,7 @@ Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) pr
 
 ## Unresolved external tasks (priority order)
 1. Rotate the production credentials in `.env.local`.
-2. Create an isolated Supabase staging project; apply the three migrations in order; record output.
+2. Create an isolated Supabase staging project; build the baseline; apply `20260501000000_add_event_url.sql` and the four ingestion migrations in order; record output (guide: `automated-event-ingestion-staging-setup.md`).
 3. Expose the `ingestion` schema to the Data API and verify `anon`/`authenticated` are denied for every table and function.
 4. List `pg_trigger` for `public.events`; confirm no user-visible side effects (needed before any manual or automatic publish).
 5. Confirm PostGIS resolves inside the SECURITY DEFINER functions on the real project.
@@ -78,8 +78,23 @@ Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) pr
 
 ## Next-PR plan
 - PR 1: `visual-update` map changes with map tests.
-- PR 2: ingestion (code, three migrations, docs, workflows) after staging evidence exists.
+- PR 2: ingestion (code, four migrations, docs, workflows) after staging evidence exists.
 - PR 3 (later): geocoder provider, admin archive action, and a contained renderer if Playwright is wanted.
 
+## Second pass: Supabase integration readiness (offline; uncommitted)
+
+| Topic | Change | Evidence |
+|-------|--------|----------|
+| Shared run lock | Migration `20261122000100`: one running collection, verification or replay run at a time (`uq_runs_one_running_pipeline`); discovery keeps its own per-type lock. Legacy overlapping rows are closed (newest kept) before the index is built. Code (`storage/runs.ts`) uses the same group for the stale sweep and active-run lookup. A hard-killed worker leaves a `running` row that blocks the pipeline until the 90-minute stale sweep (no SIGTERM handler; see the runbook) | jest storage, replay and security suites; SQL harness (upgrade path, cross-type refusal, discovery independence, release) |
+| Verify under contention | If another run holds the lock, verify runs its read-only operational checks, adds `recheck_skipped`, rechecks nothing and writes no run row; a verification holder gives `skipped_overlap` | replay suite |
+| Verify pagination and PostgREST `max_rows` | Candidates are paged with `.range()`, ownership applied per page, scan stops once more than 1000 owned events are seen; `.in()` lists are chunked at 100. Overflow detection is tested at server limits of 100, 500 and 1000 rows; manual or claimed events do not consume the budget | replay suite (in-memory database with `maxRows` truncation) |
+| Partial-collection freshness | A `partial` collection counts as the freshness heartbeat (`getLastSuccessfulRun`) but raises a new `collection_partial` warning naming the succeeded and attempted source counts; `getLatestFinishedRun` added | storage and replay suites |
+| Staging artifacts | `automated-event-ingestion-staging-checks.sql` (read-only), `automated-event-ingestion-staging-write-checks.sql` (rolled-back publication, deletion, ownership, role probes), guarded `npm run ingest:staging-check`, and `automated-event-ingestion-staging-setup.md` | harness runs both SQL files, proves they flag a production-ref function, anon grants, disabled RLS and a missing lock index, and that the write script leaves no rows and refuses to run on a production-calling baseline; `tests/ingestion/staging-check.test.ts` covers the guard and classification with fake clients |
+| Doc reconciliation | Four migrations plus the `add_event_url` baseline step, commit references, runbook run-lock section, plan TASK-24 YAML replaced by pointers to the real workflows, matrix and security review updated | review |
+
+Nothing in this pass was executed against a real Supabase project, real PostGIS or the real Data API.
+
 ## Change inventory
-Tracked under `docs/operations/` and `docs/architecture/`: runbook, launch checklist, shadow-results template, requirements matrix, this assessment, security review. New migration: `supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql`. New test: `tests/ingestion/source-coordinates.test.ts`. Changed source: `lib/ingestion/{types.ts,process-candidate.ts,adapters/jsonld.ts,adapters/playwright.ts,storage/sources.ts,storage/audit.ts,workers/replay-worker.ts,workers/verify-worker.ts,workers/verify-report.ts}`, `scripts/ingestion/{collect.ts,verify.ts}`, both workflows, `components/ingestion/candidate-review-form.tsx`, SQL harness files. Nothing is committed beyond `aca5020`; the corrections are uncommitted.
+Second pass additions: `supabase/migrations/20261122000100_ingestion_pipeline_run_lock.sql`, `scripts/ingestion/staging-check.ts`, `tests/ingestion/staging-check.test.ts`, `docs/operations/automated-event-ingestion-staging-{checks.sql,write-checks.sql,setup.md}`; changed `lib/ingestion/storage/runs.ts`, `lib/ingestion/workers/{verify-worker,daily-collection,replay-worker,verify-report}.ts`, `scripts/ingestion/collect.ts`, `package.json`, the in-memory test database helper, storage, replay and security tests, SQL harness files, the daily workflow comment, and the docs listed above.
+
+First-pass inventory. Tracked under `docs/operations/` and `docs/architecture/`: runbook, launch checklist, shadow-results template, requirements matrix, this assessment, security review. New migration: `supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql`. New test: `tests/ingestion/source-coordinates.test.ts`. Changed source: `lib/ingestion/{types.ts,process-candidate.ts,adapters/jsonld.ts,adapters/playwright.ts,storage/sources.ts,storage/audit.ts,workers/replay-worker.ts,workers/verify-worker.ts,workers/verify-report.ts}`, `scripts/ingestion/{collect.ts,verify.ts}`, both workflows, `components/ingestion/candidate-review-form.tsx`, SQL harness files. That first pass is committed (`68d49e0`); the second-pass changes above are uncommitted.

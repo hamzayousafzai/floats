@@ -3,8 +3,8 @@ import type { VerificationStatus, VerificationSummary } from "./verify-worker";
 /**
  * Exit codes for `ingest:verify`:
  * - succeeded: 0.
- * - partial: 0. Warnings only (a failing source, an event the source stopped listing, the 1000-candidate limit, a recheck
- *   skipped because collection was running). The job stays green but every finding is annotated.
+ * - partial: 0. Warnings only (a failing source, an event the source stopped listing, the 1000-candidate limit, rechecks
+ *   skipped because another ingestion run held the lock). The job stays green but every finding is annotated.
  * - failed: 1. At least one error finding (a missed daily run, a recheck that threw, the run deadline passing before every
  *   source was rechecked). The job fails so the failure notification fires.
  * - skipped_overlap: 0. Another verification is already running and covers the same checks; annotated as a warning.

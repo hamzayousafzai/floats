@@ -22,7 +22,7 @@ export async function main(): Promise<void> {
   console.log(`[ingest:daily] starting in ${config.publishMode} mode`);
   const summary = await runDailyCollection({ client, config, registry, log: (message) => console.log(message) });
   console.log(`[ingest:daily] summary ${JSON.stringify({ ...summary, sources: undefined })}`);
-  if (summary.status === "skipped_overlap") console.log("[ingest:daily] skipped: another collection run is in progress");
+  if (summary.status === "skipped_overlap") console.log(`::warning title=ingest:daily::Skipped: ${summary.errorSummary ?? "another ingestion run is in progress"}; no source was collected`);
   if (summary.status === "failed") process.exitCode = 1;
 }
 

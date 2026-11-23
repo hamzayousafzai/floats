@@ -13,7 +13,7 @@ Status key:
 | TASK-01 | Reconcile repository and live-schema assumptions | PARTIAL | `docs/architecture/automated-event-ingestion-repository-audit.md` | BLOCKED: live schema, Data API exposure and `public.events` triggers are unverified |
 | TASK-02 | Packages and script entrypoints | DONE | `package.json` scripts (`ingest:*`, `test:ingestion`) | none |
 | TASK-03 | Runtime config and types | DONE | `tests/ingestion/config.test.ts` | none |
-| TASK-04 | Private ingestion schema and publisher function | DONE (SUBSTITUTE-PG) | Migrations `20261120000100`, `20261121000100`; harness 286/286 | BLOCKED: apply to real Supabase with real PostGIS |
+| TASK-04 | Private ingestion schema and publisher function | DONE (SUBSTITUTE-PG) | Migrations `20261120000100`, `20261120000200`, `20261121000100`, `20261122000100`; harness 318 PASS, 0 FAIL (substitute PostgreSQL), plus staging-check SQL files exercised there | BLOCKED: apply to real Supabase with real PostGIS on an operator-built baseline |
 | TASK-05 | Typed backend persistence | DONE | `tests/ingestion/storage.test.ts` (incl. CAS metrics) | none |
 | TASK-06 | Seed Charlotte organizers | DONE | `source-seeding.test.ts` | BLOCKED: live selector and ToS verification |
 | TASK-07 | Safe HTTP network access | DONE | `adapters.test.ts`, `safe-fetch.test.ts`, `security.test.ts` (SSRF, redirects, DNS pinning) | none |
@@ -33,8 +33,8 @@ Status key:
 | TASK-21 | Admin ingestion pages | DONE | `admin-ui.test.tsx` | no browser verification performed |
 | TASK-22 | Daily worker orchestration | DONE | `daily-worker.test.ts`, `end-to-end.test.ts` | none |
 | TASK-23 | Weekly bounded discovery worker | DONE | `discovery.test.ts` | BLOCKED: live-source behavior |
-| TASK-24 | Scheduled GitHub workflows | PARTIAL | SHA-pinned actions, verify step, security tests | BLOCKED: actionlint not installed; schedules start only after merge to the default branch |
-| TASK-25 | Replay, verification, retention | DONE | `replay.test.ts` (replay and verify), `retention.test.ts` | `ingest:verify` rechecks at most 1000 events (reported as a `recheck_incomplete` warning only when more exist); own 15-minute deadline |
+| TASK-24 | Scheduled GitHub workflows | PARTIAL | SHA-pinned actions, verify step, security tests; actionlint v1.7.12 passed locally on both workflows (exit 0) | BLOCKED: schedules start only after merge to the default branch; re-run actionlint in CI |
+| TASK-25 | Replay, verification, retention | DONE | `replay.test.ts` (replay and verify), `retention.test.ts` | `ingest:verify` pages candidates and rechecks at most 1000 ingestion-owned events (`recheck_incomplete` warning only when more exist; overflow detection tested at PostgREST limits 100/500/1000); shares one run lock with collection and replay (`recheck_skipped` when held); partial collections raise `collection_partial`; own 15-minute deadline |
 | TASK-26 | End-to-end local Supabase integration and security | BLOCKED | Substitute-PG harness only | Needs Docker/local Supabase or an isolated project |
 | TASK-27 | Security review and operator runbook | PARTIAL | Security review and runbook corrected in this pass | Items marked UNVERIFIED/BLOCKED there |
 | TASK-28 | Shadow launch checklist and activation gate | BLOCKED | Checklist and shadow-results template written | Three real shadow days and owner approval |

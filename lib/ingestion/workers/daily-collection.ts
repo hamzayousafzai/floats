@@ -87,8 +87,9 @@ export async function runDailyCollection(deps: DailyCollectionDeps): Promise<Dai
   const staleMinutes = deps.staleRunMinutes ?? DEFAULT_STALE_RUN_MINUTES;
 
   await abandonStaleRuns(client, "collection", staleMinutes, now);
-  if (await findActiveRun(client, "collection", staleMinutes, now)) {
-    return emptySummary("skipped_overlap", null, config.publishMode, "A collection run is already in progress");
+  const active = await findActiveRun(client, "collection", staleMinutes, now);
+  if (active) {
+    return emptySummary("skipped_overlap", null, config.publishMode, `A ${active.run_type} run is already in progress`);
   }
   let run: RunRow;
   try {
