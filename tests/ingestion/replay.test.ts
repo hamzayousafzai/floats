@@ -10,6 +10,8 @@ import type { CollectionResult, RawEvent } from "@/lib/ingestion/types";
 import { type DailyCollectionConfig, runDailyCollection } from "@/lib/ingestion/workers/daily-collection";
 import { rawEventFromObservation, runReplay } from "@/lib/ingestion/workers/replay-worker";
 import { runVerification } from "@/lib/ingestion/workers/verify-worker";
+import { MAX_RECHECKED_EVENTS } from "@/lib/ingestion/workers/verify-worker";
+import { verificationAnnotations, verificationExitCode } from "@/lib/ingestion/workers/verify-report";
 
 const NOW = new Date("2031-11-20T12:00:00Z");
 const EVENT_ID = "11111111-2222-4333-8444-555555555555";
@@ -43,10 +45,14 @@ function harness() {
   const db = new MemoryDb();
   let events: (sourceId: string) => RawEvent[] = () => [];
   let failWith: string | null = null;
+  let delayMs = 0;
   const registry: Pick<AdapterRegistry, "resolve"> = {
     resolve: () => ({
       type: "html",
-      collect: async (def) => (failWith ? { sourceId: def.id, success: false, events: [], discoveredUrls: [], error: failWith } : ok(def.id, events(def.id))),
+      collect: async (def) => {
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return failWith ? { sourceId: def.id, success: false, events: [], discoveredUrls: [], error: failWith } : ok(def.id, events(def.id));
+      },
     }),
   };
   const addSource = (name: string, overrides: Record<string, unknown> = {}) =>
@@ -57,7 +63,7 @@ function harness() {
   const verify = (overrides = {}) => runVerification({ client, config: SHADOW, registry, geocode: async () => GEO, now: () => NOW, sleep: async () => undefined, ...overrides });
   const candidates = () => db.rows("ingestion.candidates") as unknown as CandidateRow[];
   const runs = () => db.rows("ingestion.runs") as unknown as Record<string, unknown>[];
-  return { db, addSource, collect, replay, verify, candidates, runs, setEvents: (fn: (id: string) => RawEvent[]) => (events = fn), setFailure: (m: string | null) => (failWith = m) };
+  return { db, addSource, collect, replay, verify, candidates, runs, setEvents: (fn: (id: string) => RawEvent[]) => (events = fn), setFailure: (m: string | null) => (failWith = m), setDelay: (ms: number) => (delayMs = ms) };
 }
 
 describe("rawEventFromObservation", () => {
@@ -270,5 +276,79 @@ describe("verification", () => {
     h2.db.failNext.push({ key: "ingestion.runs", op: "select", error: { code: "XX000", message: "db down" } });
     h2.db.failNext.push({ key: "ingestion.runs", op: "select", error: { code: "XX000", message: "db down" } });
     await expect(h2.verify()).rejects.toThrow();
+  });
+
+  describe("incomplete verification", () => {
+    /** Seeds `count` upcoming ingestion-owned candidates for a disabled source, so nothing is fetched. */
+    function seedOwned(count: number) {
+      const h = harness();
+      const source = h.addSource("Big", { enabled: false });
+      const candidates = h.db.seed("ingestion.candidates", Array.from({ length: count }, (_, i) => ({ primary_source_id: source.id, status: "published", published_event_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, starts_at: "2031-12-06T10:00:00Z", title: `Event ${i}` })));
+      h.db.seed("public.event_ingestion_links", candidates.map((c) => ({ event_id: c.published_event_id, candidate_id: c.id, source_id: source.id, management_state: "ingestion" })));
+      return h;
+    }
+    const capFindings = (s: { findings: { code: string }[] }) => s.findings.filter((f) => f.code === "recheck_incomplete");
+
+    it("does not report the cap when exactly the limit exists", async () => {
+      const summary = await seedOwned(MAX_RECHECKED_EVENTS).verify();
+      expect(summary.ownedUpcomingEvents).toBe(MAX_RECHECKED_EVENTS);
+      expect(capFindings(summary)).toEqual([]);
+    });
+
+    it("reports the cap only when more than the limit exist, and still examines exactly the limit", async () => {
+      const summary = await seedOwned(MAX_RECHECKED_EVENTS + 1).verify();
+      expect(summary.ownedUpcomingEvents).toBe(MAX_RECHECKED_EVENTS);
+      expect(capFindings(summary)).toEqual([expect.objectContaining({ severity: "warning", message: expect.stringContaining(`More than ${MAX_RECHECKED_EVENTS}`) })]);
+      expect(summary.status).not.toBe("succeeded");
+    });
+
+    it("fails the run when the deadline passes before every source is rechecked", async () => {
+      const h = harness();
+      const a = h.addSource("A");
+      h.addSource("B");
+      h.setEvents((id) => [raw({ sourceId: id, externalEventId: id, sourceUrl: `https://a.example.test/events/${id}`, address: id === a.id ? "100 Example St, Charlotte, NC 28202" : "200 Example St, Charlotte, NC 28202", title: id === a.id ? "Example Winter Makers Market" : "Second Weekend Artisan Fair" })]);
+      await h.collect();
+      for (const c of h.candidates()) {
+        Object.assign(c, { status: "published", published_event_id: c.id });
+        h.db.seed("public.event_ingestion_links", [{ event_id: c.published_event_id, candidate_id: c.id, source_id: c.primary_source_id, management_state: "ingestion" }]);
+      }
+      h.setDelay(30);
+      const summary = await h.verify({ runDeadlineMs: 5 });
+      expect(summary.status).toBe("failed");
+      expect(summary.findings).toContainEqual(expect.objectContaining({ code: "recheck_incomplete", severity: "error" }));
+      expect(summary.sourcesRechecked).toBeLessThan(2);
+    });
+
+    it("never rechecks while a collection run is in progress", async () => {
+      const { h } = await withOwnedEvent();
+      h.db.seed("ingestion.runs", [{ run_type: "collection", status: "running", started_at: new Date(NOW.getTime() - 60_000).toISOString() }]);
+      const summary = await h.verify();
+      expect(summary).toMatchObject({ sourcesRechecked: 0, ownedUpcomingEvents: 1 });
+      expect(summary.findings).toContainEqual(expect.objectContaining({ code: "recheck_skipped", severity: "warning" }));
+    });
+  });
+});
+
+describe("verification exit codes and annotations", () => {
+  it.each([
+    ["succeeded", 0],
+    ["partial", 0],
+    ["failed", 1],
+    ["skipped_overlap", 0],
+  ] as const)("%s exits %i", (status, code) => {
+    expect(verificationExitCode(status)).toBe(code);
+  });
+
+  it("annotates every finding, with errors as errors and warnings as warnings", () => {
+    const lines = verificationAnnotations({ status: "failed", findings: [{ code: "missed_daily_run", severity: "error", message: "No run\nrecorded 100%" }, { code: "source_failing", severity: "warning", message: "A failed" }] });
+    expect(lines).toEqual(["::error title=ingest:verify missed_daily_run::No run%0Arecorded 100%25", "::warning title=ingest:verify source_failing::A failed"]);
+  });
+
+  it("makes a skipped verification visible instead of silent", () => {
+    expect(verificationAnnotations({ status: "skipped_overlap", findings: [] })).toEqual([expect.stringMatching(/^::warning .*Skipped/)]);
+  });
+
+  it("produces no annotations for a clean run", () => {
+    expect(verificationAnnotations({ status: "succeeded", findings: [] })).toEqual([]);
   });
 });

@@ -97,16 +97,19 @@ async function refreshSource(client: IngestionClient, existing: SourceRow, input
 }
 
 export interface SourceMetricsDelta {
+  /** When the attempt started (chronological order), not when it finished. */
   attemptedAt?: Date;
   success?: boolean;
   validEvents?: number;
   rejectedEvents?: number;
 }
 
+const latest = (stored: string | null, candidate: string): string => (stored !== null && new Date(stored).getTime() >= new Date(candidate).getTime() ? stored : candidate);
+
 /**
- * Applies one source attempt to its counters. `successful_runs` increases once per successful source attempt.
- * The write is a compare-and-swap on the counters it read, retried a few times, so a collection run and a manual
- * verification or replay touching the same source cannot silently overwrite each other's increments.
+ * Applies one source attempt. Counters add up whatever the completion order; `last_attempt_at` and `last_success_at`
+ * only move forward in attempt time, so an older attempt that finishes late cannot make a newer failure look like the
+ * latest success (or the reverse). The write is a compare-and-swap on everything it read, retried a few times.
  */
 export async function updateSourceMetrics(client: IngestionClient, sourceId: string, delta: SourceMetricsDelta): Promise<SourceRow> {
   const at = (delta.attemptedAt ?? new Date()).toISOString();
@@ -114,31 +117,33 @@ export async function updateSourceMetrics(client: IngestionClient, sourceId: str
     const current = await getSourceById(client, sourceId);
     if (!current) throw new Error("Source not found");
     const patch: Record<string, unknown> = {
-      last_attempt_at: at,
+      last_attempt_at: latest(current.last_attempt_at, at),
       valid_events: current.valid_events + Math.max(0, delta.validEvents ?? 0),
       rejected_events: current.rejected_events + Math.max(0, delta.rejectedEvents ?? 0),
-      updated_at: at,
+      updated_at: new Date().toISOString(),
     };
     if (delta.success === true) {
       patch.successful_runs = current.successful_runs + 1;
-      patch.last_success_at = at;
+      patch.last_success_at = latest(current.last_success_at, at);
     } else if (delta.success === false) {
       patch.failed_runs = current.failed_runs + 1;
     }
-    const { data, error } = await ingestionDb(client)
+    let query = ingestionDb(client)
       .from("sources")
       .update(patch)
       .eq("id", sourceId)
       .eq("valid_events", current.valid_events)
       .eq("rejected_events", current.rejected_events)
       .eq("successful_runs", current.successful_runs)
-      .eq("failed_runs", current.failed_runs)
-      .select("*")
-      .maybeSingle();
+      .eq("failed_runs", current.failed_runs);
+    // `eq(col, null)` never matches in PostgREST; a null read must be compared with `is`.
+    query = current.last_attempt_at === null ? query.is("last_attempt_at", null) : query.eq("last_attempt_at", current.last_attempt_at);
+    query = current.last_success_at === null ? query.is("last_success_at", null) : query.eq("last_success_at", current.last_success_at);
+    const { data, error } = await query.select("*").maybeSingle();
     throwIfError("Failed to update source metrics", error);
     if (data) return data as SourceRow;
   }
   throw new Error("Failed to update source metrics: concurrent updates did not settle");
 }
 
-const METRICS_CAS_ATTEMPTS = 4;
+const METRICS_CAS_ATTEMPTS = 6;

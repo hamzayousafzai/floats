@@ -41,8 +41,8 @@ function setup(configuration: Record<string, unknown> = {}) {
   const [source] = db.seed("ingestion.sources", [
     { name: "A", base_url: "https://a.example.test", source_type: "organizer", adapter: "jsonld", trust_state: "trusted", successful_runs: 10, valid_events: 30, configuration },
   ]);
-  // Deliberately NO `geocode` override: this is the real entrypoint path with no provider configured.
-  const deps = (): ProcessDependencies => ({ client: db.client() as unknown as IngestionClient, config: CONFIG, source: source as unknown as SourceRow, now: () => NOW });
+  // No `geocode` override unless a test passes one: the default is the real entrypoint path with no provider configured.
+  const deps = (overrides: Partial<ProcessDependencies> = {}): ProcessDependencies => ({ client: db.client() as unknown as IngestionClient, config: CONFIG, source: source as unknown as SourceRow, now: () => NOW, ...overrides });
   return { db, source: source as unknown as SourceRow, deps, candidates: () => db.rows("ingestion.candidates") as unknown as CandidateRow[] };
 }
 
@@ -66,6 +66,57 @@ describe("real entrypoint without a geocoder", () => {
     expect(candidate.location_verified).toBe(false);
     expect(candidate.latitude).toBeNull();
     expect(candidate.status).not.toBe("ready");
+  });
+});
+
+describe("precedence between the geocoder and source coordinates", () => {
+  const unverified = async () => ({ latitude: 35.3, longitude: -80.7, formattedAddress: "approx", provider: "mock", verified: false });
+  const verified = async () => ({ latitude: 35.2271, longitude: -80.8431, formattedAddress: "exact", provider: "mock", verified: true });
+
+  it("an unverified geocode does not suppress operator-verified source coordinates", async () => {
+    const { deps, candidates } = setup({ coordinateTrust: "verified" });
+    await processRawEvent(deps({ geocode: unverified }), raw());
+    expect(candidates()[0]).toMatchObject({ location_verified: true, latitude: 35.22712, longitude: -80.84314, status: "ready" });
+  });
+
+  it("an unverified geocode stays unverified when the source is not coordinate-trusted", async () => {
+    for (const configuration of [{}, { coordinateTrust: true }, { coordinateTrust: "unverified" }]) {
+      const { deps, candidates } = setup(configuration);
+      await processRawEvent(deps({ geocode: unverified }), raw());
+      expect(candidates()[0]).toMatchObject({ location_verified: false, latitude: 35.3, longitude: -80.7 });
+      expect(candidates()[0].status).not.toBe("ready");
+    }
+  });
+
+  it("an unverified geocode stays unverified when trusted source coordinates fail precision, origin or address checks", async () => {
+    const bad: Partial<RawEvent>[] = [
+      { coordinates: { latitude: 35.22, longitude: -80.84, origin: "jsonld-place-geo" } },
+      { coordinates: { latitude: 35.22712, longitude: -80.84314, origin: "html" } as unknown as RawEvent["coordinates"] },
+      { coordinates: null },
+    ];
+    for (const override of bad) {
+      const { deps, candidates } = setup({ coordinateTrust: "verified" });
+      await processRawEvent(deps({ geocode: unverified }), raw(override));
+      expect(candidates()[0]).toMatchObject({ location_verified: false, latitude: 35.3, longitude: -80.7 });
+    }
+  });
+
+  it("a verified geocode wins over source coordinates", async () => {
+    const { deps, candidates } = setup({ coordinateTrust: "verified" });
+    await processRawEvent(deps({ geocode: verified }), raw({ coordinates: { latitude: 35.30001, longitude: -80.70001, origin: "jsonld-place-geo" } }));
+    expect(candidates()[0]).toMatchObject({ location_verified: true, latitude: 35.2271, longitude: -80.8431 });
+  });
+
+  it("the radius gate still applies to trusted source coordinates after an unverified geocode", async () => {
+    const { deps, candidates } = setup({ coordinateTrust: "verified" });
+    await processRawEvent(deps({ geocode: unverified }), raw({ coordinates: { latitude: 33.749, longitude: -84.388, origin: "jsonld-place-geo" } }));
+    expect(candidates()[0].status).not.toBe("ready");
+  });
+
+  it("a geocoder that finds nothing still lets trusted source coordinates verify the location", async () => {
+    const { deps, candidates } = setup({ coordinateTrust: "verified" });
+    await processRawEvent(deps({ geocode: async () => null }), raw());
+    expect(candidates()[0]).toMatchObject({ location_verified: true, status: "ready" });
   });
 });
 

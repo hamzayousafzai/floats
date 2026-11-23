@@ -13,7 +13,8 @@ concurrency:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Budget: install (~5) + collect step (30, worker deadline 25) + verify step (20, worker deadline 15) + slack.
+    timeout-minutes: 60
     # Secrets must come from an ISOLATED (staging) project until the launch checklist is signed off.
     env:
       INGESTION_PUBLISH_MODE: shadow
@@ -31,8 +32,10 @@ jobs:
         run: npm ci
       # Chromium is deliberately NOT installed: browser rendering is disabled until network containment exists.
       - name: Collect
+        timeout-minutes: 30
         run: npm run ingest:daily
-      # Runs even when collection fails so failing sources and missed runs are still reported; a nonzero exit fails the job.
+      # Runs even when collection fails or times out. Steps are sequential in one job, and the verifier refuses to recheck while a collection run is still marked running, so the two never write concurrently.
       - name: Verify
         if: ${{ !cancelled() }}
+        timeout-minutes: 20
         run: npm run ingest:verify

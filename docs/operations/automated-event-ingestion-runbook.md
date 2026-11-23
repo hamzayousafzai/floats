@@ -25,7 +25,8 @@ Baseline: 30 pre-existing tsc errors and 30 eslint errors in old `__tests__`; ju
 ## Schedules
 - GitHub only runs `schedule` workflows from the default branch. Merging to `main` is what starts them; until then only `workflow_dispatch` works.
 - Cron is UTC and not DST aware. Daily 09:15 UTC is 05:15 EDT in summer and 04:15 EST in winter. Discovery runs Sundays 10:15 UTC.
-- The daily workflow runs `ingest:verify` after collection even when collection fails (`if: !cancelled()`), and the job fails on a nonzero exit.
+- The daily workflow runs `ingest:verify` after collection even when collection fails (`if: !cancelled()`). Collection and verification have separate budgets: collection deadline 25 min (step timeout 30), verification deadline 15 min (step timeout 20), job timeout 60. A collection timeout does not consume verification time.
+- `ingest:verify` exit codes: `succeeded` 0, `partial` 0 (warnings only, shown as workflow annotations `ingest:verify <code>`), `skipped_overlap` 0 (warning annotation; another verify holds the lock), `failed` 1 (any error finding, including a missed deadline). `partial` and `skipped_overlap` do not fail the job, so read the annotations after any run that shows them.
 - GitHub emails the workflow owner on scheduled-workflow failure only if notifications are enabled. Turn on failure notifications for the repository, and treat "no successful run recorded in 36 hours" (`missed_daily_run` finding) as an alert.
 - GitHub disables scheduled workflows after 60 days without repository activity; re-enable them if needed.
 
@@ -49,7 +50,8 @@ Baseline: 30 pre-existing tsc errors and 30 eslint errors in old `__tests__`; ju
 | `missed_daily_run` | No successful daily collection in the last 36 hours (or ever) |
 | `source_failing` / `source_stale` | Latest attempt failed / no success for 3 days |
 | `recheck_failed` | A source with owned upcoming events could not be rechecked |
-| `recheck_incomplete` | More than 1000 upcoming published candidates, or the run deadline passed before every source was rechecked |
+| `recheck_incomplete` | Warning: more than 1000 upcoming published candidates exist, so only the soonest 1000 were examined. Error: the 15-minute verification deadline passed before every source was rechecked |
+| `recheck_skipped` | Warning: a collection run was in progress, so no source was rechecked (verify never runs alongside collection). Rerun verify after collection ends |
 | `owned_event_not_seen` | A source stopped listing an owned event; it stays published (disappearance is not cancellation) |
 | `cancellation_pending` | A cancellation or change was reported but shadow mode did not apply it |
 

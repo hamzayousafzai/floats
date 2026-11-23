@@ -52,7 +52,7 @@ Repository inspection confirmed nullable `public.events.org_id`, required `publi
 
 ### GitHub Actions
 
-Create `.github/workflows/ingestion-daily.yml` at `15 9 * * *` UTC and `.github/workflows/ingestion-discovery.yml` at `15 10 * * 0` UTC. Run against default-branch trusted code with `contents: read`, serialized concurrency groups, a 30-minute job timeout, Node 22 and `npm ci`. Install Playwright Chromium for collection only. `workflow_dispatch` permits authorized manual reruns. Schedules can be late; monitor last run. UTC means the Eastern wall-clock run hour changes during daylight saving.
+Create `.github/workflows/ingestion-daily.yml` at `15 9 * * *` UTC and `.github/workflows/ingestion-discovery.yml` at `15 10 * * 0` UTC. Run against default-branch trusted code with `contents: read`, serialized concurrency groups, a 60-minute job timeout for the daily workflow (25-minute collection and 15-minute verification deadlines) and 30 minutes for discovery, Node 22 and `npm ci`. Install Playwright Chromium for collection only. `workflow_dispatch` permits authorized manual reruns. Schedules can be late; monitor last run. UTC means the Eastern wall-clock run hour changes during daylight saving.
 
 ### GitHub secrets and environment
 

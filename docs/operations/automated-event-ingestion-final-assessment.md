@@ -1,13 +1,19 @@
 # Automated Event Ingestion - Final Hardening Assessment
 
-Deployment state: **NOT_DEPLOYED**. Nothing was deployed, committed or published. `.env.local` was never read or used. Branch `ingestion-update` (the plan calls it `feature/automated-event-ingestion`; same work). Base HEAD `b8184df`.
+Deployment state: **NOT_DEPLOYED**. Nothing was deployed or published, and `.env.local` was never read or used. Branch `ingestion-update`, reviewed at commit `aca5020` plus the uncommitted operational corrections listed below. Three things are separate and none of them is done:
+
+| Layer | State |
+|-------|-------|
+| Vercel app deployment (the Next.js web app) | Not performed. The app build passes locally (`build:ci`); Vercel does not run ingestion workers. |
+| Ingestion database deployment (three migrations on a Supabase project) | Not performed. Only a substitute embedded PostgreSQL harness was run. |
+| Scheduled-worker activation (GitHub Actions schedules) | Not active. Schedules start only when the workflows reach the default branch; until then only `workflow_dispatch` works. |
 
 ## Decisions (separate)
 
 | Decision | Verdict | Why |
 |----------|---------|-----|
 | Isolated shadow run (staging Supabase, shadow mode, no production credentials) | **GO, conditional** | Code and tests are ready. Preconditions are operator steps: isolated project, migrations applied, `ingestion` exposed to the Data API with grants verified, `public.events` triggers listed. Run with `INGESTION_PUBLISH_MODE=shadow`. |
-| Merge to `main` (starts scheduled workflows) | **NO-GO** | Needs three reviewed shadow days, actionlint, ToS and live selector verification, failure notifications, and a decision about the unrelated map UI commits (D6). Schedules start the moment the workflows reach the default branch. |
+| Merge to `main` (starts scheduled workflows) | **NO-GO** | Needs three reviewed shadow days, ToS and live selector verification, failure notifications, and a decision about the unrelated map UI commits (D6). Schedules start the moment the workflows reach the default branch. |
 | Live automatic publishing | **NO-GO** | No geocoder, no real Supabase/PostGIS evidence, no shadow results, no admin archive action, no owner approval. |
 
 ## Executed evidence (this machine, Windows, Node)
@@ -16,17 +22,27 @@ Deployment state: **NOT_DEPLOYED**. Nothing was deployed, committed or published
 |-------|---------|--------|
 | Type check | `npx tsc --noEmit` | 30 errors, all in pre-existing `__tests__` files (series-follow 13, cron 12, upload 4, logout 1). No new errors. |
 | Lint | `npm run lint` | 30 errors, all in pre-existing `__tests__` files (`__mocks__/supabase.ts` 11, favorites 9, FavoriteButton 6, check-in 4). No new errors; no warnings in ingestion files. |
-| Jest, SQL suites enabled | `$env:INGESTION_PG_TOOLS_DIR=...; npx jest --ci --runInBand` | 49 suites, 933 tests, all passed |
-| Jest, SQL env unset | `npx jest --ci --runInBand` | 47 passed, 2 suites skipped; 919 passed, 14 skipped. **PARTIAL**: the SQL-gated suites did not run. |
-| Ingestion only | `npm run test:ingestion` equivalent (`jest tests/ingestion --runInBand`) | 31 suites, 674 tests passed (SQL env set) |
+| Jest, SQL suites enabled | `$env:INGESTION_PG_TOOLS_DIR=...; npx jest --ci --runInBand` | 49 suites, 956 tests, all passed |
+| Jest, SQL env unset | `npx jest --ci --runInBand` | 47 passed, 2 suites skipped; 942 passed, 14 skipped. **PARTIAL**: the SQL-gated suites did not run. |
+| Ingestion only | `npm run test:ingestion` | 31 suites, 697 tests passed (SQL env set) |
 | SQL harness | `node tests/ingestion/db-harness/verify-sql.mjs` | 286/286 checks, exit code 0. **Substitute embedded PostgreSQL with a PostGIS shim; not real Supabase.** |
 | Build | `npm run build:ci` | Compiled, 17/17 static pages, exit code 0 |
-| actionlint | not run | BLOCKED: not installed |
+| actionlint | `actionlint .github/workflows/ingestion-daily.yml .github/workflows/ingestion-discovery.yml` | v1.7.12 (release zip checksum verified against the published checksums), exit code 0, no findings |
 | Real Supabase, PostGIS, PostgREST | not run | BLOCKED: no Docker, no authorized project |
 
 Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) produced 8 failures in `concurrency` and `ownership`; each passes alone and serially. The embedded PostgreSQL instances contend. `npm run test:ingestion` already uses `--runInBand`; keep it that way.
 
-## Findings fixed in this pass
+## Operational corrections after review of `aca5020`
+
+| Finding | Correction |
+|---------|------------|
+| Collection and verification shared one deadline and timeout | Separate budgets: collection deadline 25 min (step 30), verification deadline 15 min (step 20), job 60. Verify still runs after a collection failure or timeout (`if: !cancelled()`). Verify skips rechecks (`recheck_skipped`) while a collection run is active, so the two never overlap in work |
+| `updateSourceMetrics` could move `last_attempt_at` / `last_success_at` backwards under overlapping runs | Timestamps only move forward in attempt time; the compare-and-swap now also covers both timestamps; counters stay exact. Regression tests cover out-of-order completion and concurrent mixed-order writes |
+| Exit codes and the cap were unclear | `succeeded`, `partial`, `skipped_overlap` exit 0 with workflow annotations; `failed` exits 1. The 1000 cap warns only when more than 1000 exist; a missed deadline is an error |
+| An unverified geocoder result suppressed operator-verified source coordinates | Precedence: verified geocode, then operator-verified source coordinates, then an unverified geocode (never verified). Trust, origin, address, precision and radius gates are unchanged |
+| Docs said there was no `.env.example` | `.env.example` exists but covers only the ingestion workers; `env-vars.md`, `local-setup.md` and `known-limitations.md` corrected |
+
+## Findings fixed in the earlier hardening pass
 
 | Priority | Finding | Fix |
 |----------|---------|-----|
@@ -54,7 +70,7 @@ Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) pr
 6. Run seed, daily, discover, verify in shadow mode with staging secrets; three reviewed days (`automated-event-ingestion-shadow-results.md`).
 7. Per-source ToS review and live selector verification (Wix/Squarespace).
 8. Choose and configure a compliant geocoder, or mark reviewed sources `coordinateTrust: verified`.
-9. Install and run actionlint on both workflows.
+9. Re-run actionlint in CI (it passed locally, v1.7.12).
 10. Enable repository failure notifications; remember schedules run only from the default branch.
 11. Decide on an admin archive/cancel action (none exists).
 12. Split or approve the map UI commits (D6).
@@ -66,4 +82,4 @@ Note: running the SQL-enabled jest suites in parallel (without `--runInBand`) pr
 - PR 3 (later): geocoder provider, admin archive action, and a contained renderer if Playwright is wanted.
 
 ## Change inventory
-Tracked under `docs/operations/` and `docs/architecture/`: runbook, launch checklist, shadow-results template, requirements matrix, this assessment, security review. New migration: `supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql`. New test: `tests/ingestion/source-coordinates.test.ts`. Changed source: `lib/ingestion/{types.ts,process-candidate.ts,adapters/jsonld.ts,adapters/playwright.ts,storage/sources.ts,storage/audit.ts,workers/replay-worker.ts,workers/verify-worker.ts}`, `scripts/ingestion/{collect.ts,verify.ts}`, both workflows, `components/ingestion/candidate-review-form.tsx`, SQL harness files. Nothing is committed; the index holds the staged inventory only.
+Tracked under `docs/operations/` and `docs/architecture/`: runbook, launch checklist, shadow-results template, requirements matrix, this assessment, security review. New migration: `supabase/migrations/20261121000100_ingestion_event_deletion_policy.sql`. New test: `tests/ingestion/source-coordinates.test.ts`. Changed source: `lib/ingestion/{types.ts,process-candidate.ts,adapters/jsonld.ts,adapters/playwright.ts,storage/sources.ts,storage/audit.ts,workers/replay-worker.ts,workers/verify-worker.ts,workers/verify-report.ts}`, `scripts/ingestion/{collect.ts,verify.ts}`, both workflows, `components/ingestion/candidate-review-form.tsx`, SQL harness files. Nothing is committed beyond `aca5020`; the corrections are uncommitted.

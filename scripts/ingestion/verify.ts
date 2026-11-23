@@ -5,8 +5,9 @@ import { RobotsChecker } from "@/lib/ingestion/security/robots";
 import { createIngestionClient } from "@/lib/ingestion/storage/client";
 import { createFetchPage } from "@/lib/ingestion/workers/fetch-page";
 import { runVerification } from "@/lib/ingestion/workers/verify-worker";
+import { verificationAnnotations, verificationExitCode } from "@/lib/ingestion/workers/verify-report";
 
-/** Exits nonzero when verification finds an error (for example a missed daily run), so a scheduler can alert on it. */
+/** Exit 1 only for `failed`; `partial` and `skipped_overlap` exit 0 but are annotated (see verify-report.ts). */
 export async function main(): Promise<void> {
   const config = loadIngestionConfig(process.env);
   const client = createIngestionClient(process.env);
@@ -23,7 +24,8 @@ export async function main(): Promise<void> {
   console.log(`[ingest:verify] starting in ${config.publishMode} mode`);
   const summary = await runVerification({ client, config, registry, log: (message) => console.log(message) });
   console.log(`[ingest:verify] summary ${JSON.stringify(summary)}`);
-  if (summary.status === "failed") process.exitCode = 1;
+  for (const line of verificationAnnotations(summary)) console.log(line);
+  process.exitCode = verificationExitCode(summary.status);
 }
 
 if (require.main === module) {

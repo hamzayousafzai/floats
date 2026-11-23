@@ -76,15 +76,16 @@ export async function processRawEvent(deps: ProcessDependencies, raw: RawEvent):
   let locationVerified = false;
   if (event.address) {
     const geocoded = await (deps.geocode ?? ((address: string) => geocodeAddress(address)))(event.address);
-    if (geocoded) {
+    // Precedence: a verified geocode, then operator-verified source coordinates, then an unverified geocode (never verified).
+    const sourceCoordinates = geocoded?.verified ? null : verifiedSourceCoordinates(raw, deps.source);
+    if (geocoded?.verified) {
       event = { ...event, latitude: geocoded.latitude, longitude: geocoded.longitude };
-      locationVerified = geocoded.verified;
-    } else {
-      const sourceCoordinates = verifiedSourceCoordinates(raw, deps.source);
-      if (sourceCoordinates) {
-        event = { ...event, latitude: sourceCoordinates.latitude, longitude: sourceCoordinates.longitude };
-        locationVerified = true;
-      }
+      locationVerified = true;
+    } else if (sourceCoordinates) {
+      event = { ...event, latitude: sourceCoordinates.latitude, longitude: sourceCoordinates.longitude };
+      locationVerified = true;
+    } else if (geocoded) {
+      event = { ...event, latitude: geocoded.latitude, longitude: geocoded.longitude };
     }
   }
 

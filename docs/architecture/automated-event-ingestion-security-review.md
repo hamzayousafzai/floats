@@ -29,5 +29,5 @@ Evidence legend: SUBSTITUTE-PG means the embedded PostgreSQL plus PostGIS shim i
 - Real Supabase, real PostGIS and PostgREST exposure are not tested.
 - No geocoder is configured. Without one, every candidate that has only an address stays `needs_review` (fail-closed), unless the source is explicitly coordinate-trusted.
 - Domain dedupe uses a `www.`-stripped host, not the public suffix list.
-- `ingest:verify` rechecks at most 1000 upcoming published candidates; a `recheck_incomplete` finding is raised when that cap is reached or the run deadline passes.
+- `ingest:verify` rechecks at most 1000 upcoming published candidates; a `recheck_incomplete` warning is raised only when more than 1000 exist, and an error when the 15-minute verification deadline passes. Verify skips rechecks (`recheck_skipped`) while a collection run is active.
 - Workflow schedules run only from the default branch; nothing runs until merged.

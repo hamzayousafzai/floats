@@ -21,7 +21,7 @@ Copy the required values from your Supabase project dashboard and any other serv
 See [env-vars.md](./env-vars.md) for the full list.
 
 ```bash
-# Create the file manually — no .env.example is provided in the repo
+# Create the file manually. `.env.example` only covers the ingestion workers, not the app keys below.
 touch .env.local
 ```
 

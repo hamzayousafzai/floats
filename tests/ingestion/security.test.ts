@@ -6,6 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { sanitizeForLog } from "@/lib/ingestion/log";
 import { UnsafeUrlError, validatePublicUrl } from "@/lib/ingestion/security/url-validation";
+import { DEFAULT_RUN_DEADLINE_MS } from "@/lib/ingestion/workers/daily-collection";
+import { DEFAULT_VERIFY_DEADLINE_MS } from "@/lib/ingestion/workers/verify-worker";
 
 const ROOT = process.cwd();
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -118,7 +120,7 @@ describe("scheduled workflows", () => {
     expect(triggers).toEqual(["schedule", "workflow_dispatch"]);
     expect(/^permissions:\n {2}contents: read\n(?! {2})/m.test(text)).toBe(true);
     expect(text).toMatch(/^ {6}INGESTION_PUBLISH_MODE: shadow$/m);
-    expect(Number(/timeout-minutes: (\d+)/.exec(text)?.[1])).toBeLessThanOrEqual(30);
+    expect(Number(/timeout-minutes: (\d+)/.exec(text)?.[1])).toBeLessThanOrEqual(60);
     const secrets = [...text.matchAll(/secrets\.([A-Z_]+)/g)].map((m) => m[1]).sort();
     expect([...new Set(secrets)]).toEqual(["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
     expect(text).not.toMatch(/pull_request|echo\s+.*secrets|set -x/);
@@ -138,8 +140,29 @@ describe("scheduled workflows", () => {
     const verify = text.indexOf("npm run ingest:verify");
     expect(collect).toBeGreaterThan(0);
     expect(verify).toBeGreaterThan(collect);
-    expect(text).toMatch(/if: \$\{\{ !cancelled\(\) \}\}\n\s+run: npm run ingest:verify/);
+    expect(text).toMatch(/if: \$\{\{ !cancelled\(\) \}\}\n(?:\s+timeout-minutes: \d+\n)?\s+run: npm run ingest:verify/);
     expect(text).not.toMatch(/continue-on-error/);
+  });
+
+  it("the daily job timeout covers the collection and verification worker deadlines separately", () => {
+    const text = read(".github/workflows/ingestion-daily.yml").replace(/\r\n/g, "\n");
+    const minutes = (re: RegExp) => Number(re.exec(text)?.[1]);
+    const job = minutes(/^ {4}timeout-minutes: (\d+)$/m);
+    const collectStep = minutes(/- name: Collect\n\s+timeout-minutes: (\d+)/);
+    const verifyStep = minutes(/- name: Verify\n\s+if: [^\n]+\n\s+timeout-minutes: (\d+)/);
+    const collectDeadline = DEFAULT_RUN_DEADLINE_MS / 60_000;
+    const verifyDeadline = DEFAULT_VERIFY_DEADLINE_MS / 60_000;
+    expect(verifyDeadline).toBeLessThan(collectDeadline);
+    expect(collectStep).toBeGreaterThan(collectDeadline);
+    expect(verifyStep).toBeGreaterThan(verifyDeadline);
+    const INSTALL_ALLOWANCE = 5;
+    expect(job).toBeGreaterThanOrEqual(INSTALL_ALLOWANCE + collectStep + verifyStep);
+  });
+
+  it("the daily workflow serializes runs and never cancels one in progress", () => {
+    const text = read(".github/workflows/ingestion-daily.yml").replace(/\r\n/g, "\n");
+    expect(text).toMatch(/^concurrency:\n {2}group: floats-ingestion-daily\n {2}cancel-in-progress: false$/m);
+    expect(text.match(/^ {2}[a-z]+:$/gm)?.filter((j) => !/permissions|concurrency|schedule|jobs/.test(j))).toEqual(["  ingest:"]);
   });
 });
 

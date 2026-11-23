@@ -34,7 +34,7 @@ Status key:
 | TASK-22 | Daily worker orchestration | DONE | `daily-worker.test.ts`, `end-to-end.test.ts` | none |
 | TASK-23 | Weekly bounded discovery worker | DONE | `discovery.test.ts` | BLOCKED: live-source behavior |
 | TASK-24 | Scheduled GitHub workflows | PARTIAL | SHA-pinned actions, verify step, security tests | BLOCKED: actionlint not installed; schedules start only after merge to the default branch |
-| TASK-25 | Replay, verification, retention | DONE | `replay.test.ts` (replay and verify), `retention.test.ts` | `ingest:verify` rechecks at most 1000 events (reported as `recheck_incomplete`) |
+| TASK-25 | Replay, verification, retention | DONE | `replay.test.ts` (replay and verify), `retention.test.ts` | `ingest:verify` rechecks at most 1000 events (reported as a `recheck_incomplete` warning only when more exist); own 15-minute deadline |
 | TASK-26 | End-to-end local Supabase integration and security | BLOCKED | Substitute-PG harness only | Needs Docker/local Supabase or an isolated project |
 | TASK-27 | Security review and operator runbook | PARTIAL | Security review and runbook corrected in this pass | Items marked UNVERIFIED/BLOCKED there |
 | TASK-28 | Shadow launch checklist and activation gate | BLOCKED | Checklist and shadow-results template written | Three real shadow days and owner approval |

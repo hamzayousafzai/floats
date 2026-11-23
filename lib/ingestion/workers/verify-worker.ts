@@ -4,13 +4,15 @@ import { ingestionDb, throwIfError } from "@/lib/ingestion/storage/client";
 import type { CandidateRow, RunRow, SourceRow } from "@/lib/ingestion/storage/rows";
 import { RunInProgressError, abandonStaleRuns, createRun, finishRun, findActiveRun, getLastSuccessfulRun } from "@/lib/ingestion/storage/runs";
 import { getEnabledSources, getSourceById } from "@/lib/ingestion/storage/sources";
-import { DEFAULT_RUN_DEADLINE_MS, DEFAULT_STALE_RUN_MINUTES } from "./daily-collection";
+import { DEFAULT_STALE_RUN_MINUTES } from "./daily-collection";
 import { type SourceRunDeps, type SourceRunReport, runSource } from "./source-runner";
 
 /** A daily run is due every 24h; a day and a half without a successful one means a run was missed. */
 export const DEFAULT_MISSED_RUN_HOURS = 36;
 export const DEFAULT_SOURCE_STALE_DAYS = 3;
 export const MAX_RECHECKED_EVENTS = 1000;
+/** Verification has its own budget, separate from collection's 25 minutes; the workflow step timeouts are sized from both. */
+export const DEFAULT_VERIFY_DEADLINE_MS = 15 * 60_000;
 
 export interface VerificationDeps extends SourceRunDeps {
   runDeadlineMs?: number;
@@ -20,7 +22,7 @@ export interface VerificationDeps extends SourceRunDeps {
   log?: (message: string) => void;
 }
 
-export type FindingCode = "missed_daily_run" | "source_failing" | "source_stale" | "recheck_failed" | "owned_event_not_seen" | "cancellation_pending" | "recheck_incomplete";
+export type FindingCode = "missed_daily_run" | "source_failing" | "source_stale" | "recheck_failed" | "owned_event_not_seen" | "cancellation_pending" | "recheck_incomplete" | "recheck_skipped";
 export interface VerificationFinding {
   code: FindingCode;
   severity: "error" | "warning";
@@ -82,9 +84,12 @@ async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<{ 
     .not("published_event_id", "is", null)
     .gte("starts_at", now.toISOString())
     .order("starts_at", { ascending: true })
-    .limit(MAX_RECHECKED_EVENTS);
+    .limit(MAX_RECHECKED_EVENTS + 1);
   throwIfError("Failed to load published candidates", error);
-  const candidates = (data ?? []) as CandidateRow[];
+  const fetched = (data ?? []) as CandidateRow[];
+  // One extra row is requested so "capped" means more exist, not merely that the limit was reached.
+  const capped = fetched.length > MAX_RECHECKED_EVENTS;
+  const candidates = fetched.slice(0, MAX_RECHECKED_EVENTS);
   if (candidates.length === 0) return { owned: [], capped: false };
 
   const { data: links, error: linkError } = await client
@@ -94,7 +99,7 @@ async function listOwnedUpcoming(client: IngestionClient, now: Date): Promise<{ 
     .eq("management_state", "ingestion");
   if (linkError) throw new Error(`Failed to load ownership links: ${sanitizeForLog(linkError.message)}`);
   const owned = new Set(((links ?? []) as { candidate_id: string }[]).map((l) => l.candidate_id));
-  return { owned: candidates.filter((c) => owned.has(c.id)), capped: candidates.length >= MAX_RECHECKED_EVENTS };
+  return { owned: candidates.filter((c) => owned.has(c.id)), capped };
 }
 
 /**
@@ -122,18 +127,24 @@ export async function runVerification(deps: VerificationDeps): Promise<Verificat
   }
 
   const deadline = new AbortController();
-  const timer = setTimeout(() => deadline.abort(), deps.runDeadlineMs ?? DEFAULT_RUN_DEADLINE_MS);
+  const timer = setTimeout(() => deadline.abort(), deps.runDeadlineMs ?? DEFAULT_VERIFY_DEADLINE_MS);
   const summary = emptySummary("succeeded", run.id, config.publishMode);
   try {
     summary.findings.push(...(await detectOperationalFindings(client, now, deps.missedRunHours ?? DEFAULT_MISSED_RUN_HOURS, deps.sourceStaleDays ?? DEFAULT_SOURCE_STALE_DAYS)));
 
     const { owned, capped } = await listOwnedUpcoming(client, now);
     if (capped) {
-      summary.findings.push({ code: "recheck_incomplete", severity: "warning", message: `More than ${MAX_RECHECKED_EVENTS} published upcoming candidates exist; only the soonest ${MAX_RECHECKED_EVENTS} were considered for recheck` });
+      summary.findings.push({ code: "recheck_incomplete", severity: "warning", message: `More than ${MAX_RECHECKED_EVENTS} published upcoming candidates exist; only the soonest ${MAX_RECHECKED_EVENTS} were examined for recheck` });
     }
     summary.ownedUpcomingEvents = owned.length;
     const bySource = new Map<string, CandidateRow[]>();
     for (const candidate of owned) bySource.set(candidate.primary_source_id, [...(bySource.get(candidate.primary_source_id) ?? []), candidate]);
+
+    // A recheck writes observations and candidates like collection does, so never run it beside a live collection.
+    if (bySource.size > 0 && (await findActiveRun(client, "collection", staleMinutes, now))) {
+      summary.findings.push({ code: "recheck_skipped", severity: "warning", message: `A collection run is in progress; ${bySource.size} source(s) with owned upcoming events were not rechecked` });
+      bySource.clear();
+    }
 
     for (const [sourceId, candidates] of bySource) {
       if (deadline.signal.aborted) {

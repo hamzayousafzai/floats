@@ -158,6 +158,53 @@ describe("sources", () => {
     expect(after?.successful_runs).toBe(3);
     expect(after?.valid_events).toBe(3);
   });
+
+  describe("overlapping attempts finishing out of order", () => {
+    const T1 = new Date("2031-11-20T09:00:00Z");
+    const T2 = new Date("2031-11-20T10:00:00Z");
+
+    it("does not move last_attempt_at or last_success_at backwards when an older success finishes last", async () => {
+      const { client } = setup();
+      const { source } = await upsertSource(client, base);
+      await updateSourceMetrics(client, source.id, { attemptedAt: T2, success: true, validEvents: 1 });
+      const late = await updateSourceMetrics(client, source.id, { attemptedAt: T1, success: true, validEvents: 2 });
+      expect(late.last_attempt_at).toBe(T2.toISOString());
+      expect(late.last_success_at).toBe(T2.toISOString());
+      expect(late).toMatchObject({ successful_runs: 2, valid_events: 3, failed_runs: 0 });
+    });
+
+    it("keeps a newer failure visible when an older success completes after it", async () => {
+      const { client } = setup();
+      const { source } = await upsertSource(client, base);
+      await updateSourceMetrics(client, source.id, { attemptedAt: T2, success: false });
+      const late = await updateSourceMetrics(client, source.id, { attemptedAt: T1, success: true });
+      expect(late.last_attempt_at).toBe(T2.toISOString());
+      expect(late.last_success_at).toBe(T1.toISOString());
+      expect(new Date(late.last_attempt_at as string).getTime()).toBeGreaterThan(new Date(late.last_success_at as string).getTime());
+      expect(late).toMatchObject({ successful_runs: 1, failed_runs: 1 });
+    });
+
+    it("does not let an older failure hide a newer success", async () => {
+      const { client } = setup();
+      const { source } = await upsertSource(client, base);
+      await updateSourceMetrics(client, source.id, { attemptedAt: T2, success: true });
+      const late = await updateSourceMetrics(client, source.id, { attemptedAt: T1, success: false });
+      expect(late.last_attempt_at).toBe(T2.toISOString());
+      expect(late.last_success_at).toBe(T2.toISOString());
+      expect(late).toMatchObject({ successful_runs: 1, failed_runs: 1 });
+    });
+
+    it("ends with the chronologically latest timestamps and exact counters for concurrent mixed-order writes", async () => {
+      const { client } = setup();
+      const { source } = await upsertSource(client, base);
+      const times = [3, 1, 5, 2, 4].map((h) => new Date(`2031-11-20T0${h}:00:00Z`));
+      await Promise.all(times.map((attemptedAt, i) => updateSourceMetrics(client, source.id, { attemptedAt, success: i !== 2, validEvents: 1, rejectedEvents: 2 })));
+      const after = await getSourceById(client, source.id);
+      expect(after).toMatchObject({ successful_runs: 4, failed_runs: 1, valid_events: 5, rejected_events: 10 });
+      expect(after?.last_attempt_at).toBe("2031-11-20T05:00:00.000Z");
+      expect(after?.last_success_at).toBe("2031-11-20T04:00:00.000Z");
+    });
+  });
 });
 
 describe("runs", () => {

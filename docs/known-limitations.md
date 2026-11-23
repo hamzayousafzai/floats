@@ -47,9 +47,9 @@ This document tracks known issues, tech debt, and architectural gaps in the curr
 
 ## Architecture
 
-### 8. No `.env.example` file
-**Issue:** New developers have no reference for required environment variables. They must consult this documentation or read the source.  
-**Fix:** Create `floats/.env.example` with placeholder values. See [env-vars.md](./env-vars.md).
+### 8. `.env.example` covers only the ingestion workers
+**Issue:** `floats/.env.example` exists, but it lists only the ingestion variables. The web app's `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `RESEND_API_KEY`, `CRON_SECRET` and `CHECKIN_DEBUG` are documented only in [env-vars.md](./env-vars.md).  
+**Fix:** Add placeholder entries for the app variables, or split into separate example files.
 
 ### 9. Supabase project ID is hardcoded
 **File:** `package.json` (`db:types` script)  

@@ -2,7 +2,7 @@
 
 Create a `.env.local` file in the `floats/` directory. This file is gitignored and must be set up manually.
 
-> There is no `.env.example` in the repository. This document is the authoritative reference.
+> `.env.example` exists but covers only the ingestion workers (`INGESTION_*`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). It does not list `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `RESEND_API_KEY`, `CRON_SECRET` or `CHECKIN_DEBUG`, so this document is the reference for the web app. Do not copy `.env.example` over an app `.env.local` without adding those keys, and never point either file at production for tests or ingestion runs.
 
 ---
 
@@ -43,7 +43,7 @@ Without `CRON_SECRET`, the cron endpoint returns `401 Unauthorized` for any call
 
 ## Vercel Environment
 
-In production (Vercel), set all variables in the Vercel project dashboard under **Settings → Environment Variables**.
+In production (Vercel), set all variables in the Vercel project dashboard under **Settings → Environment Variables**. These are the web-app variables only: the ingestion workers do not run on Vercel. They run in GitHub Actions and read the `INGESTION_*` values and an isolated project's service key from GitHub secrets and variables. Deploying the app to Vercel does not deploy the ingestion database migration or activate the scheduled workers.
 
 The CI workflow stubs two variables to allow the build to succeed without hitting Supabase:
 
